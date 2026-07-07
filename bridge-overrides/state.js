@@ -1,0 +1,145 @@
+/**
+ * Filesystem-backed state implementation for Tauri shells.
+ *
+ * Replaces the IndexedDB state bridge (shells/web/src/bridge/state.js) at build
+ * time via the resolveId override in vite.config.js. The API surface must stay in
+ * sync with that file — tools, the engine, the gallery and catalog sync never see
+ * which implementation is running, so a missing method (e.g. sizes) crashes boot.
+ *
+ * Storage: $APPDATA/Lolly/saved-state/<slot>.json
+ */
+
+import { stripAssetModifiers } from '@lolly/engine';
+import {
+  BaseDirectory,
+  exists,
+  mkdir,
+  readTextFile,
+  writeTextFile,
+  readDir,
+  remove,
+} from '@tauri-apps/plugin-fs';
+
+const STATE_DIR = 'saved-state';
+
+async function ensureDir() {
+  const ok = await exists(STATE_DIR, { baseDir: BaseDirectory.AppData });
+  if (!ok) {
+    await mkdir(STATE_DIR, { baseDir: BaseDirectory.AppData, recursive: true });
+  }
+}
+
+function slotPath(slot) {
+  // Sanitise slot names: replace anything that isn't alphanumeric/hyphen/underscore/dot
+  return `${STATE_DIR}/${slot.replace(/[^\w.-]/g, '_')}.json`;
+}
+
+// Read every saved record once. Returns { raw, bytes } per file (bytes = the
+// on-disk JSON size, matching the web shell's Blob-size estimate). Reused by
+// list / sizes / _getAssetRefs so we walk the directory a single way.
+async function readAllRecords() {
+  await ensureDir();
+  let entries;
+  try {
+    entries = await readDir(STATE_DIR, { baseDir: BaseDirectory.AppData });
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const entry of entries) {
+    if (!entry.name?.endsWith('.json')) continue;
+    try {
+      const text = await readTextFile(`${STATE_DIR}/${entry.name}`, { baseDir: BaseDirectory.AppData });
+      out.push({ raw: JSON.parse(text), bytes: new Blob([text]).size });
+    } catch { /* skip corrupt entries */ }
+  }
+  return out;
+}
+
+// createStateAPI signature matches the web shell (db param ignored — not needed here).
+export function createStateAPI(_db) {
+  return {
+    async save(slot, data, thumb = null) {
+      await ensureDir();
+      const record = {
+        slot,
+        toolId: data.__toolId,
+        toolVersion: data.__toolVersion,
+        label: data.__label,
+        data,
+        thumb,
+        updatedAt: new Date().toISOString(),
+      };
+      await writeTextFile(slotPath(slot), JSON.stringify(record, null, 2), {
+        baseDir: BaseDirectory.AppData,
+      });
+    },
+
+    async load(slot) {
+      const path = slotPath(slot);
+      const ok = await exists(path, { baseDir: BaseDirectory.AppData });
+      if (!ok) return null;
+      try {
+        const raw = JSON.parse(await readTextFile(path, { baseDir: BaseDirectory.AppData }));
+        return raw.data ?? null;
+      } catch {
+        return null;
+      }
+    },
+
+    async list() {
+      const records = await readAllRecords();
+      return records
+        .map(({ raw }) => ({
+          slot: raw.slot,
+          toolId: raw.toolId,
+          toolVersion: raw.toolVersion,
+          label: raw.label,
+          filename: raw.data?.__export_filename || null,
+          thumb: raw.thumb ?? null,
+          updatedAt: raw.updatedAt,
+        }))
+        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+    },
+
+    async delete(slot) {
+      const path = slotPath(slot);
+      const ok = await exists(path, { baseDir: BaseDirectory.AppData });
+      if (ok) await remove(path, { baseDir: BaseDirectory.AppData });
+    },
+
+    async sizes() {
+      const result = {};
+      for (const { raw, bytes } of await readAllRecords()) {
+        if (raw.slot) result[raw.slot] = bytes;
+      }
+      return result;
+    },
+
+    // Blob keys (id:format:version) referenced across all saved sessions, so
+    // catalog sync won't evict on-demand blobs a session still needs.
+    async _getAssetRefs() {
+      const refs = new Set();
+      for (const { raw } of await readAllRecords()) collectAssetRefs(raw.data, refs);
+      return refs;
+    },
+  };
+}
+
+function collectAssetRefs(value, refs) {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectAssetRefs(item, refs);
+    return;
+  }
+  if (value.source === 'library' && value.id && value.format && value.version != null) {
+    // A modified ref (`<baseId>?theme=<t>` icon OR `<baseId>?treatment=<x>` photo)
+    // is derived from the BASE blob — the key the cache holds and pruning must
+    // protect. Match the web bridge exactly: strip BOTH modifiers, not just theme,
+    // or a saved session's treated photo gets a key that never matches and is evicted.
+    const baseId = stripAssetModifiers(String(value.id));
+    refs.add(`${baseId}:${value.format}:${value.version}`);
+    return;
+  }
+  for (const v of Object.values(value)) collectAssetRefs(v, refs);
+}

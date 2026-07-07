@@ -1,0 +1,82 @@
+# Flatpak manifest for the Lolly desktop app (Tauri v2).
+#
+# STRATEGY: this manifest does NOT build Lolly from source. flatpak-builder runs
+# offline (no network in the build sandbox), and vendoring every cargo crate + npm
+# package as Flatpak sources is fragile and huge. Instead, CI builds a Debian package
+# with `tauri build --bundles deb` (which has network + the webkit2gtk toolchain), and
+# this manifest just unpacks that prebuilt binary into /app. See ./README.md and
+# ../../../.github/workflows/flatpak.yml.
+#
+# The .deb must be staged next to this file as `lolly.deb` before building — CI does
+# that from the build-deb job's artifact; locally, copy it there yourself.
+#
+# app-id == the Tauri `identifier` in ../src-tauri/tauri.conf.json, so the Flatpak,
+# the .desktop file, the GTK app-id and the AppStream component all agree.
+id: tools.lolly.desktop
+
+# Tauri v2 renders through webkit2gtk-4.1 (GTK3), which the GNOME runtime provides.
+# Keep runtime-version in lockstep with the flatpak-builder container image tag in the
+# CI workflow (gnome-47 -> '47'). Bump both together.
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+
+# The in-sandbox executable (Cargo package name `lolly-desktop`; no mainBinaryName
+# override in tauri.conf.json, so this is what lands in /usr/bin inside the .deb).
+command: lolly-desktop
+
+finish-args:
+  # Rendering: Wayland first, X11 fallback, GPU access for the webview compositor.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --share=ipc
+  # Network: catalog/asset sync, the tauri-plugin-http net bridge, and the url-shot
+  # tool's local headless-Chrome DevTools connection.
+  - --share=network
+  # Let users save exports to their Downloads/Documents (state lives in the app's
+  # per-app dir, which Flatpak grants automatically — no extra permission needed).
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+  # Common Tauri-on-Flatpak fix: the DMABUF renderer shows a blank window on some
+  # GPUs/drivers under the sandbox. Drop this once you confirm rendering is fine.
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+
+modules:
+  - name: lolly
+    buildsystem: simple
+    build-commands:
+      # 1) Unpack the Tauri-built .deb (ar archive -> data.tar.gz) and install ONLY its
+      #    binary, as /app/bin/lolly-desktop to match `command:` above. Installing
+      #    whatever single binary ./usr/bin ships keeps this correct even if a Tauri
+      #    version names it differently than the Cargo package. (Tauri gzips the data
+      #    member, hence -xzf; see README if a future version switches to xz/zst.)
+      - ar x lolly.deb
+      - tar -xzf data.tar.gz
+      - install -Dm755 "$(find usr/bin -maxdepth 1 -type f | head -1)" /app/bin/lolly-desktop
+      # 2) Ship a deterministic desktop entry, AppStream metainfo, and icons rather
+      #    than fishing them out of the .deb's internal layout (names/paths vary by
+      #    Tauri version). flatpak-builder auto-exports the .desktop + metainfo.
+      - install -Dm644 tools.lolly.desktop.desktop /app/share/applications/tools.lolly.desktop.desktop
+      - install -Dm644 tools.lolly.desktop.metainfo.xml /app/share/metainfo/tools.lolly.desktop.metainfo.xml
+      - install -Dm644 icon-128.png /app/share/icons/hicolor/128x128/apps/tools.lolly.desktop.png
+      - install -Dm644 icon-256.png /app/share/icons/hicolor/256x256/apps/tools.lolly.desktop.png
+      - install -Dm644 icon-32.png  /app/share/icons/hicolor/32x32/apps/tools.lolly.desktop.png
+    sources:
+      - type: file
+        path: lolly.deb
+      - type: file
+        path: tools.lolly.desktop.desktop
+      - type: file
+        path: tools.lolly.desktop.metainfo.xml
+      - type: file
+        path: icon-128.png
+      - type: file
+        path: icon-256.png
+      - type: file
+        path: icon-32.png
