@@ -62,7 +62,9 @@ function bundleRepoDirs() {
     writeBundle(options) {
       const outDir = options.dir ?? resolve(__dirname, 'dist');
       for (const dir of ['catalog', 'tools']) {
-        cpSync(resolve(repoRoot, dir), resolve(outDir, dir), { recursive: true });
+        // dereference: tools/ and catalog are profile VIEWS (symlink farms built
+        // by scripts/use-profile.ts) — copy the real files, not the links.
+        cpSync(resolve(repoRoot, dir), resolve(outDir, dir), { recursive: true, dereference: true });
       }
     },
   };
