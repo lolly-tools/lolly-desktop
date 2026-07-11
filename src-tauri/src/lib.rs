@@ -6,7 +6,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
-        .invoke_handler(tauri::generate_handler![capture::capture_page])
+        .invoke_handler(tauri::generate_handler![
+            capture::capture_page,
+            capture::capture_page_pdf
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Lolly desktop");
 }
