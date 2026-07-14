@@ -9,7 +9,7 @@
  * Storage: $APPDATA/Lolly/saved-state/<slot>.json
  */
 
-import { stripAssetModifiers } from '@lolly/engine';
+import { stripAssetModifiers, sessionVersionStamp, migrateSessionRecord, encodeFsToken } from '@lolly/engine';
 import {
   BaseDirectory,
   exists,
@@ -21,6 +21,10 @@ import {
 } from '@tauri-apps/plugin-fs';
 
 const STATE_DIR = 'saved-state';
+// Written once the legacy-filename migration has completed cleanly (below), so it
+// never re-walks the directory on subsequent launches. Not a `.json`, so the
+// record readers skip it.
+const MIGRATION_MARKER = `${STATE_DIR}/.slotname-v1`;
 
 async function ensureDir() {
   const ok = await exists(STATE_DIR, { baseDir: BaseDirectory.AppData });
@@ -29,16 +33,97 @@ async function ensureDir() {
   }
 }
 
+// Collision-free, cross-platform-safe filename for an arbitrary slot name via
+// the engine's reversible percent-encoding codec (encodeFsToken): "Q3 Report",
+// "Q3/Report", "Q3+Report", "Q3_Report" and "Björn keynote" all map to DISTINCT
+// files — each recoverable to its exact slot. This replaces the old
+// `slot.replace(/[^\w.-]/g, '_')`, which collapsed all of those onto one file
+// and silently destroyed data (P0-4), and it can't diverge from the mobile
+// bridge because both share the one engine codec.
+function slotFilename(slot) {
+  return `${encodeFsToken(slot)}.json`;
+}
+
 function slotPath(slot) {
-  // Sanitise slot names: replace anything that isn't alphanumeric/hyphen/underscore/dot
-  return `${STATE_DIR}/${slot.replace(/[^\w.-]/g, '_')}.json`;
+  return `${STATE_DIR}/${slotFilename(slot)}`;
+}
+
+// Where migrateSessionRecord reports a record written by a newer app build.
+function stateLog(level, message, meta) {
+  (level === 'warn' ? console.warn : console.info)(`[lolly:state] ${message}`, meta ?? '');
+}
+
+// One-time migration from the old lossy filename scheme to the collision-free
+// one. Old files were named by `slot.replace(/[^\w.-]/g, '_')`, so a session
+// named "Q3 Report" lives at `Q3_Report.json` but load() now looks for
+// `Q3%20Report.json` and would never find it. Walk saved-state/, read each
+// record's authoritative `raw.slot`, and rewrite it under the canonical name.
+// (Sessions already lost to a pre-fix collision can't be recovered — only one
+// file survived on disk — but the survivor keeps its true name.) Idempotent and
+// memoised: a clean pass drops a marker so later launches skip the walk.
+let migrationPromise = null;
+function ensureMigrated() {
+  if (!migrationPromise) migrationPromise = migrateLegacyFilenames();
+  return migrationPromise;
+}
+
+async function migrateLegacyFilenames() {
+  await ensureDir();
+  if (await exists(MIGRATION_MARKER, { baseDir: BaseDirectory.AppData })) return;
+
+  let entries;
+  try {
+    entries = await readDir(STATE_DIR, { baseDir: BaseDirectory.AppData });
+  } catch {
+    return;
+  }
+
+  let failures = 0;
+  for (const entry of entries) {
+    const name = entry.name;
+    if (!name?.endsWith('.json')) continue;
+    try {
+      const text = await readTextFile(`${STATE_DIR}/${name}`, { baseDir: BaseDirectory.AppData });
+      const raw = JSON.parse(text);
+      const slot = raw?.slot;
+      if (typeof slot !== 'string' || !slot) continue;
+      const canonical = slotFilename(slot);
+      if (canonical === name) continue; // already at its collision-free name
+
+      // Move to the canonical name. If a canonical file already exists (a fresh
+      // save under the new scheme), keep whichever is newer so migration never
+      // resurrects a stale legacy copy over a real one. Two DIFFERENT slots can
+      // no longer map to the same canonical name, so this only fires for a true
+      // same-slot duplicate.
+      if (await exists(`${STATE_DIR}/${canonical}`, { baseDir: BaseDirectory.AppData })) {
+        const targetText = await readTextFile(`${STATE_DIR}/${canonical}`, { baseDir: BaseDirectory.AppData });
+        const target = JSON.parse(targetText);
+        if ((raw.updatedAt ?? '') > (target?.updatedAt ?? '')) {
+          await writeTextFile(`${STATE_DIR}/${canonical}`, text, { baseDir: BaseDirectory.AppData });
+        }
+      } else {
+        await writeTextFile(`${STATE_DIR}/${canonical}`, text, { baseDir: BaseDirectory.AppData });
+      }
+      await remove(`${STATE_DIR}/${name}`, { baseDir: BaseDirectory.AppData });
+    } catch {
+      failures++;
+    }
+  }
+
+  // Only mark done on a fully clean pass; otherwise retry next launch (the walk
+  // is idempotent — already-canonical files are skipped instantly).
+  if (failures === 0) {
+    try {
+      await writeTextFile(MIGRATION_MARKER, '1', { baseDir: BaseDirectory.AppData });
+    } catch { /* retry next launch */ }
+  }
 }
 
 // Read every saved record once. Returns { raw, bytes } per file (bytes = the
 // on-disk JSON size, matching the web shell's Blob-size estimate). Reused by
 // list / sizes / _getAssetRefs so we walk the directory a single way.
 async function readAllRecords() {
-  await ensureDir();
+  await ensureMigrated();
   let entries;
   try {
     entries = await readDir(STATE_DIR, { baseDir: BaseDirectory.AppData });
@@ -60,7 +145,7 @@ async function readAllRecords() {
 export function createStateAPI(_db) {
   return {
     async save(slot, data, thumb = null) {
-      await ensureDir();
+      await ensureMigrated();
       const record = {
         slot,
         toolId: data.__toolId,
@@ -69,6 +154,7 @@ export function createStateAPI(_db) {
         data,
         thumb,
         updatedAt: new Date().toISOString(),
+        ...sessionVersionStamp(),
       };
       await writeTextFile(slotPath(slot), JSON.stringify(record, null, 2), {
         baseDir: BaseDirectory.AppData,
@@ -76,12 +162,16 @@ export function createStateAPI(_db) {
     },
 
     async load(slot) {
+      await ensureMigrated();
       const path = slotPath(slot);
       const ok = await exists(path, { baseDir: BaseDirectory.AppData });
       if (!ok) return null;
       try {
         const raw = JSON.parse(await readTextFile(path, { baseDir: BaseDirectory.AppData }));
-        return raw.data ?? null;
+        // Read version stamps through the shared migrate-or-warn branch rather
+        // than reaching for `raw.data` directly (records predating versioning
+        // migrate as v0; a newer-app record is read as-is but reported).
+        return migrateSessionRecord(raw, stateLog);
       } catch {
         return null;
       }
@@ -103,6 +193,7 @@ export function createStateAPI(_db) {
     },
 
     async delete(slot) {
+      await ensureMigrated();
       const path = slotPath(slot);
       const ok = await exists(path, { baseDir: BaseDirectory.AppData });
       if (ok) await remove(path, { baseDir: BaseDirectory.AppData });
