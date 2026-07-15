@@ -29,6 +29,15 @@
 import { createExportAPI as createWebExportAPI } from '../../web/src/bridge/export.ts';
 import { writeFile, mkdir, exists, BaseDirectory } from '@tauri-apps/plugin-fs';
 
+// This override REPLACES the whole web export module for every importer inside
+// bridge/, not just for the bridge index — so it must carry that module's full
+// public surface, or a sibling importing one of its other exports fails the build
+// (export-pptx.ts pulls rasterizeNodeToDataUrl, _host, pureRotationDeg, …).
+// The star re-export forwards LIVE bindings, which `_host` (an `export let` the
+// web createExportAPI assigns) depends on; our local createExportAPI below
+// shadows the starred one per ES module semantics.
+export * from '../../web/src/bridge/export.ts';
+
 const SUBDIR = 'Lolly';
 const BASE = { baseDir: BaseDirectory.Download };
 

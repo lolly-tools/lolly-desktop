@@ -24,7 +24,13 @@ const STATE_DIR = 'saved-state';
 // Written once the legacy-filename migration has completed cleanly (below), so it
 // never re-walks the directory on subsequent launches. Not a `.json`, so the
 // record readers skip it.
-const MIGRATION_MARKER = `${STATE_DIR}/.slotname-v1`;
+//
+// MUST NOT begin with a dot. tauri-plugin-fs defaults require_literal_leading_dot
+// to `cfg!(unix)` — true on macOS and Android — so the `$APPDATA/**` glob behind
+// fs:scope-appdata-recursive cannot match a dotfile, and every access to one is
+// rejected as "forbidden path". As `.slotname-v1` this rejection propagated out
+// of ensureMigrated() and failed EVERY state call, so the shell could not boot.
+const MIGRATION_MARKER = `${STATE_DIR}/slotname-v1.marker`;
 
 async function ensureDir() {
   const ok = await exists(STATE_DIR, { baseDir: BaseDirectory.AppData });
@@ -69,7 +75,13 @@ function ensureMigrated() {
 
 async function migrateLegacyFilenames() {
   await ensureDir();
-  if (await exists(MIGRATION_MARKER, { baseDir: BaseDirectory.AppData })) return;
+  // Defence in depth: a marker read must never fail boot. Every state call awaits
+  // this, so a rejection here takes the whole shell down. The walk below is
+  // idempotent, so treating an unreadable marker as "not migrated" costs at worst
+  // a repeated walk per launch.
+  try {
+    if (await exists(MIGRATION_MARKER, { baseDir: BaseDirectory.AppData })) return;
+  } catch { /* fall through and re-walk */ }
 
   let entries;
   try {
