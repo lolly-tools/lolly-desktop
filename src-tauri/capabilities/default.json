@@ -13,6 +13,7 @@
     "fs:allow-mkdir",
     "fs:allow-read-dir",
     "fs:scope-appdata-recursive",
+    "fs:scope-download-recursive",
     "shell:allow-open",
     "http:default"
   ]

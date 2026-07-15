@@ -107,6 +107,7 @@ export default defineConfig({
       'state': resolve(__dirname, 'bridge-overrides/state.js'),
       'capture': resolve(__dirname, 'bridge-overrides/capture.js'),
       'capabilities-provided': resolve(__dirname, 'bridge-overrides/capabilities-provided.js'),
+      'export': resolve(__dirname, 'bridge-overrides/export.js'),
     }),
     bundleRepoDirs(),
   ],
