@@ -17,6 +17,9 @@
     "fs:scope-appdata-recursive",
     "fs:scope-download-recursive",
     "shell:allow-open",
-    "http:default"
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://*:*" }]
+    }
   ]
 }
