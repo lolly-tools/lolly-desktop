@@ -1,7 +1,7 @@
 /**
  * CaptureAPI (Tauri desktop) — page-to-image AND page-to-vector capture.
  *
- * Replaces the web shell's throwing stub (shells/web/src/bridge/capture.js) at
+ * Replaces the web shell's throwing stub (shells/web/src/bridge/capture.ts) at
  * build time via vite.config.js's resolveId override. Where a browser page can't
  * screenshot a cross-origin URL, the desktop shell can: it drives a headless
  * Chrome over the DevTools Protocol.
@@ -24,6 +24,35 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { windowPdfSvg, HOOK_BUDGET_MS } from '@lolly/engine';
+import type { AssetRef, CaptureAPI, CaptureSpec } from '@lolly-tools/core/host-v1';
+
+/**
+ * What the two native commands hand back. These MIRROR `CaptureResult` and
+ * `VectorResult` in src-tauri/src/capture.rs, which serialise with serde
+ * `rename_all = "camelCase"` — nothing checks the two sides against each other, so
+ * a field renamed in Rust has to be renamed here by hand. Both `data` fields are
+ * base64 (PNG / PDF) exactly as CDP returned them.
+ */
+interface NativeCaptureResult {
+  data: string;
+  /** Captured box in CSS px — crop applied, range extension included. */
+  width: number;
+  height: number;
+  /** The cropped viewport height alone; height − frameHeight is the pan distance. */
+  frameHeight: number;
+  pageWidth: number;
+  pageHeight: number;
+  /** Resolved scroll offset the frame starts at, document space. */
+  scrollY: number;
+}
+
+interface NativeVectorResult {
+  data: string;
+  /** Page geometry at capture time, CSS px. pageHeight reports the value actually
+   *  printed, which the Rust side may have capped at MAX_PDF_H. */
+  pageWidth: number;
+  pageHeight: number;
+}
 
 // url-shot captures in beforeExport, which the runtime time-boxes at
 // HOOK_BUDGET_MS.beforeExport (default 5s) and FAILS the export on overrun. A real
@@ -39,26 +68,27 @@ HOOK_BUDGET_MS.beforeExport = Math.max(HOOK_BUDGET_MS.beforeExport, 90_000);
 // A scroll position: 0..1 ⇒ fraction of the scrollable height, > 1 ⇒ px offset.
 // Clamped into the page's real range. Mirrors capture.rs resolve_scroll so the
 // vector window frames the same region the native raster clip does.
-function resolveScroll(depth, pageH, viewportH) {
+function resolveScroll(depth: number | undefined, pageH: number, viewportH: number): number {
   const max = Math.max(0, pageH - viewportH);
   if (depth == null) return 0;
   const px = depth <= 1 ? Math.max(0, depth) * max : depth;
   return Math.min(Math.max(0, px), max);
 }
 
-const clampInset = (v) => (Number.isFinite(v) ? Math.min(0.9, Math.max(0, v)) : 0);
+const clampInset = (v: number | undefined): number =>
+  Number.isFinite(v) ? Math.min(0.9, Math.max(0, v as number)) : 0;
 
-export function createCaptureAPI() {
+export function createCaptureAPI(): CaptureAPI {
   return {
-    async page(spec) {
-      const s = spec ?? {};
+    async page(spec: CaptureSpec): Promise<AssetRef> {
+      const s = spec ?? ({} as CaptureSpec);
       if (!s.url) throw new Error('capture.page: a url is required');
 
-      let res;
+      let res: NativeCaptureResult;
       try {
         // Rust deserialises this into CaptureSpec (serde rename_all = camelCase),
         // so the keys here must stay camelCase.
-        res = await invoke('capture_page', {
+        res = await invoke<NativeCaptureResult>('capture_page', {
           spec: {
             url: s.url, width: s.width, height: s.height,
             scrollDepth: s.scrollDepth, rangeTo: s.rangeTo,
@@ -66,7 +96,7 @@ export function createCaptureAPI() {
           },
         });
       } catch (e) {
-        const msg = typeof e === 'string' ? e : (e?.message ?? String(e));
+        const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
         throw new Error(`Page capture failed: ${msg}`);
       }
 
@@ -90,13 +120,13 @@ export function createCaptureAPI() {
       };
     },
 
-    async vector(spec) {
-      const s = spec ?? {};
+    async vector(spec: CaptureSpec): Promise<AssetRef> {
+      const s = spec ?? ({} as CaptureSpec);
       if (!s.url) throw new Error('capture.vector: a url is required');
 
-      let res;
+      let res: NativeVectorResult;
       try {
-        res = await invoke('capture_page_pdf', {
+        res = await invoke<NativeVectorResult>('capture_page_pdf', {
           spec: {
             url: s.url, width: s.width, height: s.height,
             scrollDepth: s.scrollDepth, rangeTo: s.rangeTo,
@@ -104,7 +134,7 @@ export function createCaptureAPI() {
           },
         });
       } catch (e) {
-        const msg = typeof e === 'string' ? e : (e?.message ?? String(e));
+        const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
         throw new Error(`Vector capture failed: ${msg}`);
       }
 

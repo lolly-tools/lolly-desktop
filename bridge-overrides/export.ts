@@ -38,15 +38,26 @@ import { writeFile, mkdir, exists, BaseDirectory } from '@tauri-apps/plugin-fs';
 // shadows the starred one per ES module semantics.
 export * from '../../web/src/bridge/export.ts';
 
+/**
+ * The host and the API shape are DERIVED from the web factory this override wraps,
+ * rather than restated. The override must remain substitutable for the web module
+ * (the resolveId plugin swaps it in for every importer inside bridge/), so a change
+ * to the web signature has to fail here at typecheck instead of at runtime in a
+ * webview. `WebHost` itself is not exported by the web module, hence Parameters<>.
+ */
+type ExportHost = Parameters<typeof createWebExportAPI>[0];
+type WebExportAPI = ReturnType<typeof createWebExportAPI>;
+
 const SUBDIR = 'Lolly';
 const BASE = { baseDir: BaseDirectory.Download };
 
 // Keep only filesystem-safe characters; never let a tool-supplied name traverse.
-const sanitize = (name) => (String(name || 'lolly-export').replace(/[^\w.\- ]+/g, '_') || 'lolly-export');
+const sanitize = (name: string | undefined): string =>
+  String(name || 'lolly-export').replace(/[^\w.\- ]+/g, '_') || 'lolly-export';
 
 // Split at the LAST dot so "a.tar.gz" → ["a.tar", ".gz"] and a dotfile keeps its
 // leading dot as part of the stem (".env" → [".env", ""], never ["", ".env"]).
-function splitExt(name) {
+function splitExt(name: string): [string, string] {
   const i = name.lastIndexOf('.');
   return i > 0 ? [name.slice(0, i), name.slice(i)] : [name, ''];
 }
@@ -56,7 +67,7 @@ function splitExt(name) {
  * MAX_TRIES we fall through to the plain name and let it overwrite rather than
  * loop forever on a pathological directory.
  */
-async function freeName(name) {
+async function freeName(name: string): Promise<string> {
   const MAX_TRIES = 100;
   const [stem, ext] = splitExt(name);
   for (let n = 0; n < MAX_TRIES; n++) {
@@ -66,7 +77,7 @@ async function freeName(name) {
   return name;
 }
 
-function toast(message, isError) {
+function toast(message: string, isError?: boolean): void {
   try {
     const t = document.createElement('div');
     t.textContent = message;
@@ -80,7 +91,7 @@ function toast(message, isError) {
   } catch { /* no DOM — nothing to show */ }
 }
 
-async function saveToDownloads(blob, filename, host) {
+async function saveToDownloads(blob: Blob, filename: string | undefined, host: ExportHost): Promise<void> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const name = sanitize(filename);
   try {
@@ -93,16 +104,16 @@ async function saveToDownloads(blob, filename, host) {
     toast(`Saved “${finalName}” to Downloads/${SUBDIR}`);
   } catch (err) {
     host?.log?.('error', 'Desktop export save failed', { error: String(err) });
-    toast(`Couldn't save “${name}”: ${err?.message || err}`, true);
+    toast(`Couldn't save “${name}”: ${err instanceof Error ? err.message : String(err)}`, true);
     throw err;
   }
 }
 
-export function createExportAPI(host) {
+export function createExportAPI(host: ExportHost): WebExportAPI {
   const web = createWebExportAPI(host);
   return {
     ...web,
-    async download(blob, filename) { await saveToDownloads(blob, filename, host); },
-    async file(blob, opts = {}) { await saveToDownloads(blob, opts.filename || 'file', host); },
+    async download(blob: Blob, filename: string) { await saveToDownloads(blob, filename, host); },
+    async file(blob: Blob, opts: { filename?: string } = {}) { await saveToDownloads(blob, opts.filename || 'file', host); },
   };
 }

@@ -11,7 +11,7 @@ Everything in this directory is therefore one of four things:
 | Path | What it is |
 |---|---|
 | `vite.config.js` | The substitution mechanism, plus dev-server middleware for `/tools/` and `/catalog/` |
-| `bridge-overrides/*.js` | The four replacement modules |
+| `bridge-overrides/*.ts` | The four replacement modules |
 | `src-tauri/` | The Rust side: the Tauri app, its permissions and native page capture |
 | `package.json`, `flatpak/`, `dist/` | Scripts, packaging, build output |
 
@@ -42,10 +42,10 @@ Two details of that hook are hard-won and easy to break:
 
 | Module | Replaced with | Why |
 |---|---|---|
-| `state` | `bridge-overrides/state.js` | Filesystem state via `tauri-plugin-fs` instead of IndexedDB. Saved sessions become `$APPDATA/Lolly/saved-state/<slot>.json`. The API surface has to match the web original method for method, because nothing downstream knows which implementation is running, so a missing method crashes boot. The logic (slot-name codec, legacy-filename migration, record shape, asset-ref collection) lives in `../tauri-shared/bridge-overrides/state-fs.js`, shared with the mobile shell; this file is just the `tauri-plugin-fs` binding it is handed, which is also where desktop-only storage behaviour would go. It is an adapter rather than a plain import because the Tauri shells are not npm workspaces, so the parent repo cannot resolve `@tauri-apps/plugin-fs`. |
-| `capture` | `bridge-overrides/capture.js` | Real page capture instead of the web shell's throwing stub. `page(spec)` calls the native `capture_page` for a raster plus page geometry; `vector(spec)` calls `capture_page_pdf` and converts the vector PDF to a standalone SVG through the engine's PDF interpreter, then windows it so a vector shot frames identical content to a raster shot of the same spec. |
-| `capabilities-provided` | `bridge-overrides/capabilities-provided.js` | Declares a genuine superset: it spreads the web list, filters out `'screen'` and adds `'filesystem'` and `'capture'`. It spreads rather than re-lists so that a capability added on the web side can never silently go missing here and gate a tool off as "desktop only" on the desktop itself. `'screen'` is subtracted because display capture is `getDisplayMedia`, and wry's webviews do not grant it without the host app answering a permission delegate that this shell does not implement, so advertising it would un-grey the screen-capture tool and then fail at the tap. |
-| `export` | `bridge-overrides/export.js` | Delivery only. The web `download()` uses `URL.createObjectURL` plus an `<a download>` click. WKWebView hands that navigation to wry, which **cancels** it outright unless a native download handler is registered, and none is, so every desktop export was silently dropped. The override replaces `download` and `file` with a real save through `tauri-plugin-fs`, into a `Lolly` subfolder of the user's own Downloads, de-colliding rather than overwriting (`qr.png` → `qr (1).png`) because macOS `BaseDirectory.Download` is the shared directory. `render()` and the rasteriser are inherited unchanged. |
+| `state` | `bridge-overrides/state.ts` | Filesystem state via `tauri-plugin-fs` instead of IndexedDB. Saved sessions become `$APPDATA/Lolly/saved-state/<slot>.json`. The API surface has to match the web original method for method, because nothing downstream knows which implementation is running, so a missing method crashes boot — as of the TS conversion that is enforced: `createFsStateAPI` returns the web module's own `WebStateAPI`, imported type-only, so a method added there and forgotten here fails `npm run typecheck` instead of a device boot. The logic (slot-name codec, legacy-filename migration, record shape, asset-ref collection) lives in `../tauri-shared/bridge-overrides/state-fs.ts`, shared with the mobile shell; this file is just the `tauri-plugin-fs` binding it is handed, which is also where desktop-only storage behaviour would go. It is an adapter rather than a plain import because the Tauri shells are not npm workspaces, so the parent repo cannot resolve `@tauri-apps/plugin-fs`. |
+| `capture` | `bridge-overrides/capture.ts` | Real page capture instead of the web shell's throwing stub. `page(spec)` calls the native `capture_page` for a raster plus page geometry; `vector(spec)` calls `capture_page_pdf` and converts the vector PDF to a standalone SVG through the engine's PDF interpreter, then windows it so a vector shot frames identical content to a raster shot of the same spec. |
+| `capabilities-provided` | `bridge-overrides/capabilities-provided.ts` | Declares a genuine superset: it spreads the web list, filters out `'screen'` and adds `'filesystem'` and `'capture'`. It spreads rather than re-lists so that a capability added on the web side can never silently go missing here and gate a tool off as "desktop only" on the desktop itself. `'screen'` is subtracted because display capture is `getDisplayMedia`, and wry's webviews do not grant it without the host app answering a permission delegate that this shell does not implement, so advertising it would un-grey the screen-capture tool and then fail at the tap. |
+| `export` | `bridge-overrides/export.ts` | Delivery only. The web `download()` uses `URL.createObjectURL` plus an `<a download>` click. WKWebView hands that navigation to wry, which **cancels** it outright unless a native download handler is registered, and none is, so every desktop export was silently dropped. The override replaces `download` and `file` with a real save through `tauri-plugin-fs`, into a `Lolly` subfolder of the user's own Downloads, de-colliding rather than overwriting (`qr.png` → `qr (1).png`) because macOS `BaseDirectory.Download` is the shared directory. `render()` and the rasteriser are inherited unchanged. |
 
 The `export` override does one thing worth calling out: it opens with `export * from '../../web/src/bridge/export.ts'`. The substitution replaces that module for **every** importer inside `bridge/`, not just the bridge index, so it has to carry the original's whole public surface or a sibling such as `export-pptx.ts` fails the build. The star re-export forwards live bindings, which matters because the web module assigns an `export let _host`, and the local `createExportAPI` shadows the starred one per ES module semantics.
 
@@ -85,13 +85,18 @@ npm run build:frontend # frontend only, into ./dist
 
 Requires a Rust toolchain. Note that `dist/` here is this shell's own output, distinct from `shells/web/dist`.
 
-There is **no `tsconfig.json` in this directory and no entry in the umbrella's `npm run typecheck`.** The frontend is typechecked as part of `tsc -p shells/web`, and the four override files are `.js`, so nothing typechecks them. A mistake in an override surfaces at build time or at runtime. Treat them accordingly.
+`tsconfig.json` here typechecks `bridge-overrides/` only — the frontend is covered by `tsc -p shells/web`. It is reached from the umbrella's `npm run typecheck` through `scripts/typecheck-tauri.ts` rather than as a bare `tsc -p` step, because the overrides import `@tauri-apps/api` and `@tauri-apps/plugin-fs` and **this shell is not an npm workspace**, so a root `npm ci` never creates its `node_modules`. That script SKIPS with a logged reason when they are absent, so a plain clone is not punished; CI installs both Tauri shells (`--omit=dev`) and then re-runs it with `--strict`, which fails on a skip, so the gate cannot quietly become a no-op. To run it locally:
+
+```bash
+npm --prefix shells/tauri-desktop ci --omit=dev   # once
+npm run typecheck:tauri
+```
 
 ## Surprising things
 
 - Everything under [How the bridge gets composed](#how-the-bridge-gets-composed-build-time-module-substitution), which is the whole point of this section existing.
 - **A state-override file name must not begin with a dot.** `tauri-plugin-fs` defaults `require_literal_leading_dot` to `cfg!(unix)`, true on macOS, so the `$APPDATA/**` glob behind `fs:scope-appdata-recursive` cannot match a dotfile and every access to one is rejected as a forbidden path. As `.slotname-v1` the migration marker's rejection propagated out and failed every state call, so the app could not boot. It is `slotname-v1.marker` now.
-- `bridge-overrides/` files are `.js` in a codebase that is otherwise TypeScript. That is not an oversight to be tidied without also adding a tsconfig and a typecheck step.
+- `vite.config.js` is still `.js` while `bridge-overrides/` is now `.ts`. The Vite config is a build-tool file (Biome excludes `**/*.config.js` repo-wide) and is not part of the shipped app; the overrides are.
 - The desktop app cannot do screen capture even though it is native. See the `'screen'` subtraction above.
 
 ## Submodule caveat
