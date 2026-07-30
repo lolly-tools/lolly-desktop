@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 /**
  * Capabilities the Tauri desktop shell fulfils — overrides the web set
  * (shells/web/src/bridge/capabilities-provided.ts) at build time via the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 /**
  * CaptureAPI (Tauri desktop) — page-to-image AND page-to-vector capture.
  *
