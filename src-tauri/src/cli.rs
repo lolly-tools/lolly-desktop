@@ -277,22 +277,19 @@ pub fn run_cli(mut context: tauri::Context, job: CliJob) {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            eprintln!("lolly[diag]: setup: building window");
-            let r = tauri::WebviewWindowBuilder::new(app, WINDOW_LABEL, tauri::WebviewUrl::App("index.html".into()))
+            // Off-screen but genuinely visible: a hidden/occluded WKWebView throttles
+            // rAF, and the tool view's paint is rAF-driven; a visible window ordered
+            // far off any display renders normally without ever showing. (The earlier
+            // off-screen stall was the first-run instance sheet blocking boot, not
+            // occlusion — see instance-choice.ts.)
+            tauri::WebviewWindowBuilder::new(app, WINDOW_LABEL, tauri::WebviewUrl::App("index.html".into()))
                 .title("Lolly")
                 .visible(true)
                 .focused(false)
-                .position(100.0, 100.0)
+                .position(-4000.0, -4000.0)
                 .inner_size(1200.0, 800.0)
                 .initialization_script(&init)
-                .on_page_load(|_w, payload| {
-                    eprintln!("lolly[diag]: page load event: {:?} url={}", payload.event(), payload.url());
-                })
-                .build();
-            match r {
-                Ok(_) => eprintln!("lolly[diag]: setup: window built OK"),
-                Err(e) => { eprintln!("lolly[diag]: setup: window build FAILED: {e}"); return Err(Box::new(e)); }
-            }
+                .build()?;
             Ok(())
         })
         .run(context)
@@ -311,9 +308,6 @@ fn build_init_script(job: &CliJob) -> String {
     s.push_str("window.__LOLLY_CLI__ = ");
     s.push_str(&global);
     s.push_str(";\n");
-    // DIAGNOSTIC heartbeat: fires once the Tauri IPC bridge exists, so we can tell
-    // "JS never ran" from "render stalled".
-    s.push_str("(function(){var n=0;var id=setInterval(function(){n++;try{if(window.__TAURI_INTERNALS__){window.__TAURI_INTERNALS__.invoke('cli_log',{level:'info',msg:'boot n='+n+' ready='+document.readyState+' hash='+location.hash});clearInterval(id);}}catch(e){}if(n>400)clearInterval(id);},25);})();\n");
     s.push_str("try{ if(!location.hash){ location.hash = ");
     s.push_str(&hash);
     s.push_str("; } }catch(e){}\n");

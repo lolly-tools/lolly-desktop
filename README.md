@@ -55,6 +55,7 @@ The mobile shell uses the same mechanism with a different set of three overrides
 
 - **`jsToTsFallback`** maps a missing `.js` specifier to its sibling `.ts`. The web shell's `index.html` still names `/src/main.js`, and it pins `vite@^8`, which resolves that implicitly. This shell pins `vite@^5`, which does not. The plugin only fires when the `.js` is genuinely absent and the `.ts` exists, so it can never shadow a real `.js`.
 - **`bundleRepoDirs`** serves `/tools/` and `/catalog/` from the repo root in dev, and copies them into `dist/` on build with `dereference: true`, because those paths are symlink farms built by `scripts/use-profile.ts` and the WebView needs real files.
+- **`pruneEmbeddedDownloads`** deletes `dist/models/` after the build. Vite's `publicDir` copy pulls the whole of `../web/public/` into `dist/`, including the ~1 GB of on-device ONNX models (matte/upscale/kokoro/whisper/trustmark — gitignored, Andy-staged). Tauri embeds *all* of `frontendDist` into the binary via `generate_context!()`, and embedding ~1.8 GB tips the crate's rlib past the 32-bit `ar` archive-offset limit — the Rust build dies with `truncated or malformed object`. The web shell already excludes `/models/` from its own app bundle (they download on demand via the offline manager); this makes the desktop build do the same, keeping the binary buildable and lean. It's a list — add any future runtime-downloaded tree here. **If a build ever fails with `truncated or malformed object`, it's this: `dist/` grew past ~2 GB; prune more.**
 
 `build.target` and `optimizeDeps.esbuildOptions.target` are both `esnext` because harfbuzzjs, the text-to-path WASM, uses top-level await, which the default `es2020` target rejects.
 
@@ -63,9 +64,35 @@ The mobile shell uses the same mechanism with a different set of three overrides
 `src-tauri/` is small and does exactly two jobs: host the WebView, and fulfil the `capture` capability.
 
 - `Cargo.toml` declares `lolly-desktop`, edition 2021, with `tauri`, `tauri-plugin-fs`, `tauri-plugin-shell`, `tauri-plugin-http`, `serde`, `serde_json` and **`headless_chrome`**.
-- `src/main.rs` (5 lines) and `src/lib.rs` (15 lines): plugin registration and the invoke handler list, nothing else.
+- `src/main.rs` and `src/lib.rs`: `run()` reads argv and **dispatches** — GUI, or a headless CLI render (see [Command-line mode](#command-line-mode-one-binary-gui-and-cli)). There is exactly one `generate_context!()` call site (in `dispatch`), so the frontend assets are embedded once; `--help`/`--version` are answered without building the app at all. `run_gui()` is the old body (plugins + `capture_page`/`capture_page_pdf` handlers).
+- `src/cli.rs`: the command-line half — argv classifier, URL-mode query builder, the off-screen headless-render window, and the `cli_write`/`cli_done`/`cli_fail`/`cli_log` invoke handlers.
 - `src/capture.rs` (312 lines): the only substantial Rust in the project. It drives a **headless Chrome over the DevTools Protocol**, deliberately not the app's own WKWebView or WebView2, because Tauri 2 has no stable API for screenshotting arbitrary content with viewport and scroll control. `capture_page` uses `Page.captureScreenshot`, and its clip rect is **document-space** when `captureBeyondViewport` is true, so scroll depth resolves into `clip.y` rather than into a `window.scrollTo`. An earlier version scrolled and then clipped at `y = 0`, which silently framed the page top at every depth. `capture_page_pdf` uses `Page.printToPDF` under `screen` media emulation for a true vector print. Both run on `spawn_blocking`, because `headless_chrome` is blocking. Both require a Chrome or Chromium install. Only non-http(s) schemes are rejected: capturing localhost or a private dev server is a feature here, because the user runs the tool on their own machine.
 - `src-tauri/capabilities/default.json` holds the Tauri permission set. Notably `fs:scope-appdata-recursive` plus `fs:scope-download-recursive`, `shell:allow-open`, and `http:default` scoped to `https://*:*`.
+
+## Command-line mode: one binary, GUI *and* CLI
+
+The macOS bundle ships a single Mach-O at `Lolly.app/Contents/MacOS/lolly-desktop`. Launched with no arguments (or from Finder) it opens the app, unchanged. Launched with a tool it renders **headlessly** and exits:
+
+```bash
+Lolly.app/Contents/MacOS/lolly-desktop qr-code --url=https://suse.com --output=qr.png
+Lolly.app/Contents/MacOS/lolly-desktop run color-palette --format=svg -o palette.svg
+Lolly.app/Contents/MacOS/lolly-desktop qr-code --url=https://x.com --format=svg -o -   > qr.svg
+Lolly.app/Contents/MacOS/lolly-desktop --help        # usage; --version; both answered in Rust, no window
+```
+
+There is **no second renderer**. A Lolly tool can only render with a JavaScript runtime (the engine renders into a DOM), and the desktop render path *is* the web shell in a WebView — so "headless" is that same web shell, driven through URL mode. `src/cli.rs`:
+
+1. `classify()` turns argv into a job: tool id + `--k=v` params become a `#/tool/<id>?…&export=1` hash (`--output`/`-o` and `--format`/`-f`/`--export` are lifted out; `-o -` means stdout). A pasted `…/#/tool/<id>?…` link works too; later `--flags` override it.
+2. `run_cli()` builds the app with the config window cleared (`config_mut().app.windows.clear()`, so nothing visible auto-opens) and creates one **off-screen** window (`-4000,-4000`, visible so WKWebView doesn't throttle its rAF) pointed at that hash, with `window.__LOLLY_CLI__` and an unknown-tool guard injected as an `initialization_script`. macOS activation policy is `Accessory` (no dock icon).
+3. The web shell auto-exports on an `export=` deep link (shells/web `views/tool.ts`), calling `host.export.download`. The [`export` override](#the-four-overrides-and-why-each-exists), seeing `window.__LOLLY_CLI__`, sends the bytes to `cli_write` (→ the exact `--output` path, or stdout) instead of Downloads, then `cli_done` exits 0.
+4. A watchdog thread (`LOLLY_CLI_TIMEOUT`, default 90s) is the hard stop; page-side `console.error`/uncaught errors are forwarded to stderr via `cli_log`. **stdout carries only the payload; every diagnostic is on stderr** — the Node CLI's contract.
+
+Two boot-path facts this depends on, both **load-bearing**:
+
+- **The window must be a real `.app` bundle.** WKWebView spawns its WebContent process over XPC and a bare `target/release/lolly-desktop` can't — the window opens but no page ever loads. Test the *bundled* binary, never the loose one.
+- **Interactive first-run gates must be skipped headlessly.** `maybeShowFirstRunInstanceSheet` (shells/web `lib/instance-choice.ts`) `await`s a modal on a fresh Tauri shell, *before* the first catalog sync — with no human it hangs boot forever and the tool never mounts (rAF runs, nothing appears, no error — a nasty silent stall). That function now early-returns when `window.__LOLLY_CLI__` is set.
+
+This is the subset that ships in the app: `run`, plus `--help`/`--version`. The full terminal experience — `list`, `describe`, `batch`, `preflight`, `validate`, every format tier, C2PA/signing — remains the Node CLI (`shells/cli`, `npm run cli`).
 
 ## Run it
 

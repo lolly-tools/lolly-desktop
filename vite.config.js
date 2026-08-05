@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve, extname, dirname } from 'node:path';
-import { existsSync, statSync, readFileSync, cpSync } from 'node:fs';
+import { existsSync, statSync, readFileSync, cpSync, rmSync } from 'node:fs';
 
 const webShell  = resolve(__dirname, '../web');
 const repoRoot  = resolve(__dirname, '../..');
@@ -70,6 +70,31 @@ function bundleRepoDirs() {
   };
 }
 
+// Keep runtime-downloaded assets OUT of the embedded frontend.
+//
+// The on-device ML models under public/models/ (matte, upscale, kokoro, whisper,
+// trustmark — ~1 GB, gitignored + Andy-staged) are fetched at RUNTIME via the
+// offline download manager, exactly as the web shell excludes /models/ from its
+// app precache group (../web/vite.config.js: the `models` bytes are never in the
+// core app). But Vite's publicDir copy pulls the WHOLE public/ tree into dist/,
+// and Tauri embeds all of frontendDist into the binary via generate_context!().
+// Embedding ~1.8 GB pushes the crate's rlib past the 32-bit `ar` archive-offset
+// limit, and the Rust build dies with "truncated or malformed object" (the
+// July 164 MB binary never embedded these). So prune them back out after the
+// copy: the desktop app downloads them on first use, the same as web.
+function pruneEmbeddedDownloads() {
+  const RUNTIME_FETCHED = ['models'];
+  return {
+    name: 'prune-embedded-downloads',
+    writeBundle(options) {
+      const outDir = options.dir ?? resolve(__dirname, 'dist');
+      for (const dir of RUNTIME_FETCHED) {
+        rmSync(resolve(outDir, dir), { recursive: true, force: true });
+      }
+    },
+  };
+}
+
 // Swap specific web-shell bridge modules for Tauri-native implementations.
 // Implemented as a resolveId plugin rather than resolve.alias because the bridge
 // imports are RELATIVE siblings ("./capture.js" from bridge/index.js): a path
@@ -110,6 +135,7 @@ export default defineConfig({
       'export': resolve(__dirname, 'bridge-overrides/export.ts'),
     }),
     bundleRepoDirs(),
+    pruneEmbeddedDownloads(),
   ],
   // Match shells/web/vite.config.js: the web shell renders ZzFXM songs and encodes
   // video in MODULE workers (src/lib/zzfxm-worker.ts, src/bridge/video-encode.worker.ts),
