@@ -28,6 +28,16 @@
  */
 import { createExportAPI as createWebExportAPI } from '../../web/src/bridge/export.ts';
 import { writeFile, mkdir, exists, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
+
+// Seeded by the native side (src-tauri/src/cli.rs build_init_script) ONLY when the
+// binary was invoked as a headless CLI render. Absent for every GUI launch, so the
+// download/file paths below are byte-identical to before unless a CLI job is running.
+declare global {
+  interface Window {
+    __LOLLY_CLI__?: { output?: string | null; stdout?: boolean };
+  }
+}
 
 // This override REPLACES the whole web export module for every importer inside
 // bridge/, not just for the bridge index — so it must carry that module's full
@@ -109,11 +119,37 @@ async function saveToDownloads(blob: Blob, filename: string | undefined, host: E
   }
 }
 
+/**
+ * Headless-CLI delivery. When the binary is running a `Lolly run <tool>` job (see
+ * src-tauri/src/cli.rs), the finished bytes go straight to Rust — which writes them
+ * to the path the user asked for (or stdout) — instead of into Downloads. On success
+ * `cli_done` ends the process (exit 0); on failure `cli_fail` prints and exits 1.
+ * This is what turns the auto-export deep link the CLI navigates to into a file on
+ * disk. Bytes cross as a plain number[] (Tauri serialises it to Vec<u8>); fine for
+ * the KB–few-MB exports a single CLI render produces.
+ */
+async function deliverCli(blob: Blob, filename: string): Promise<void> {
+  try {
+    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+    await invoke('cli_write', { bytes, filename });
+    await invoke('cli_done');
+  } catch (err) {
+    // cli_write rejected (e.g. unwritable --output). Report and exit non-zero.
+    try { await invoke('cli_fail', { message: `export failed: ${err instanceof Error ? err.message : String(err)}` }); } catch { /* process already gone */ }
+  }
+}
+
 export function createExportAPI(host: ExportHost): WebExportAPI {
   const web = createWebExportAPI(host);
   return {
     ...web,
-    async download(blob: Blob, filename: string) { await saveToDownloads(blob, filename, host); },
-    async file(blob: Blob, opts: { filename?: string } = {}) { await saveToDownloads(blob, opts.filename || 'file', host); },
+    async download(blob: Blob, filename: string) {
+      if (window.__LOLLY_CLI__) return deliverCli(blob, filename);
+      await saveToDownloads(blob, filename, host);
+    },
+    async file(blob: Blob, opts: { filename?: string } = {}) {
+      if (window.__LOLLY_CLI__) return deliverCli(blob, opts.filename || 'file');
+      await saveToDownloads(blob, opts.filename || 'file', host);
+    },
   };
 }
