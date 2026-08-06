@@ -133,6 +133,9 @@ export default defineConfig({
       'capture': resolve(__dirname, 'bridge-overrides/capture.ts'),
       'capabilities-provided': resolve(__dirname, 'bridge-overrides/capabilities-provided.ts'),
       'export': resolve(__dirname, 'bridge-overrides/export.ts'),
+      // Native background removal: routes the wasm-impossible full BiRefNet to a
+      // Rust ORT command; other models delegate to the shared wasm runner.
+      'matte': resolve(__dirname, 'bridge-overrides/matte.ts'),
     }),
     bundleRepoDirs(),
     pruneEmbeddedDownloads(),

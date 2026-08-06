@@ -1,5 +1,6 @@
 mod capture;
 mod cli;
+mod matte;
 
 /// Native entry (called from `main.rs`, and the mobile entry point). Reads argv
 /// and dispatches to either the GUI or a headless CLI render.
@@ -42,7 +43,8 @@ fn run_gui(context: tauri::Context) {
         .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             capture::capture_page,
-            capture::capture_page_pdf
+            capture::capture_page_pdf,
+            matte::matte_infer
         ])
         .run(context)
         .expect("error while running Lolly desktop");
