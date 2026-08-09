@@ -1,6 +1,7 @@
 mod capture;
 mod cli;
 mod matte;
+mod site_fetch;
 
 /// Native entry (called from `main.rs`, and the mobile entry point). Reads argv
 /// and dispatches to either the GUI or a headless CLI render.
@@ -44,7 +45,14 @@ fn run_gui(context: tauri::Context) {
         .invoke_handler(tauri::generate_handler![
             capture::capture_page,
             capture::capture_page_pdf,
-            matte::matte_infer
+            matte::matte_infer,
+            // Website source for the Design System studio (plans/97 §9). GUI
+            // only, deliberately: unlike capture, which cli.rs also registers
+            // because the url-shot TOOL calls host.capture mid-render, this
+            // command is reachable only from a button in the studio. A headless
+            // `Lolly run <tool>` render can never invoke it, so registering it
+            // there would be dead surface.
+            site_fetch::site_fetch
         ])
         .run(context)
         .expect("error while running Lolly desktop");

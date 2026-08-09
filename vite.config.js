@@ -136,6 +136,24 @@ export default defineConfig({
       // Native background removal: routes the wasm-impossible full BiRefNet to a
       // Rust ORT command; other models delegate to the shared wasm runner.
       'matte': resolve(__dirname, 'bridge-overrides/matte.ts'),
+      // Native website read for the Design System studio's Website source
+      // (plans/97 §9): a Rust `site_fetch` command, no CSP and no CORS in the
+      // way. The web module this replaces is the one WITHOUT a transport — a
+      // browser page cannot fetch a third-party origin, so on a plain PWA the
+      // studio never renders the tile.
+      //
+      // THIS KEY MATCHES NOTHING TODAY (checked 2026-08-09). The plugin only
+      // rewrites an import made from inside a bridge/ dir, and there is no
+      // shells/web/src/bridge/site-fetch.ts to import — so the override never
+      // fires. It is left in place for when that module is added; adding it is
+      // what turns this back on, and if it is ever renamed this key must follow
+      // it (exactly how the '.js' keying above once shipped web IndexedDB
+      // state). The failure mode is quiet either way — a missing tile, not a
+      // crash — which is why the Website source does NOT depend on it: the web
+      // shell probes Tauri's own __TAURI_INTERNALS__.invoke global at runtime
+      // (detectSiteTransport in lib/design-system/sources/website.ts) and
+      // invokes site_fetch directly. See tauri-shared/bridge-overrides/site-fetch.ts.
+      'site-fetch': resolve(__dirname, 'bridge-overrides/site-fetch.ts'),
     }),
     bundleRepoDirs(),
     pruneEmbeddedDownloads(),
