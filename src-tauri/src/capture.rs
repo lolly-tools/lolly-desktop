@@ -33,12 +33,15 @@
 //! schemes (no file://, chrome://). The SSRF hardening belongs to the deferred
 //! server-side render service, where an attacker could choose the URL.
 
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use headless_chrome::protocol::cdp::{Emulation, Page};
 use headless_chrome::{Browser, LaunchOptions, Tab};
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State};
 
 /// Ceiling on any captured strip, in CSS px — stays comfortably under Chrome's
 /// 16384-px texture limit at dpr 1 and bounds the base64 IPC payload. The range
@@ -116,38 +119,304 @@ pub struct VectorResult {
     pub page_height: f64,
 }
 
+/// The optional live "sign-in" browser, shared by every capture so an authenticated
+/// session the user set up in the visible window is RIDDEN by the (otherwise headless)
+/// screenshots. Tauri-managed state; `None` until the user opens a sign-in window,
+/// `None` again after Clear.
+///
+/// One live Chrome, reused — captures open a BACKGROUND tab in it (same live cookie
+/// jar; no profile-lock, and none of the kill/flush race that closing a separate
+/// browser between sign-in and capture would incur). When no window is live, a capture
+/// falls back to a fresh headless browser: on the persistent profile IFF the user has
+/// signed in at least once (the `signin_marker`), so an earlier session still applies —
+/// otherwise on a throwaway temp profile, exactly as before this feature (stateless, so
+/// an ordinary public-page shot never accretes cookies in the shared profile).
+///
+/// `active` mirrors `browser.is_some()` as a lock-free flag so the status query never
+/// contends with a 30 s capture that is holding `browser`.
+#[derive(Default, Clone)]
+pub struct CaptureSession {
+    browser: Arc<Mutex<Option<Browser>>>,
+    active: Arc<AtomicBool>,
+}
+
+impl CaptureSession {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Browser>> {
+        // A capture panic must never wedge every later capture: recover the guard.
+        self.browser.lock().unwrap_or_else(|p| p.into_inner())
+    }
+}
+
+/// Where the persistent Chrome profile lives (under the app data dir, so it survives
+/// restarts). Does NOT create it — the status check must not materialise an empty dir.
+fn capture_profile_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("resolve app data dir: {e}"))?
+        .join("capture-profile"))
+}
+
+/// The persistent profile, created if absent — cookies/session a sign-in window writes
+/// here are reused by later shots.
+fn capture_profile_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = capture_profile_path(app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create capture profile dir: {e}"))?;
+    Ok(dir)
+}
+
+/// A marker written the first time the user opens a sign-in window. Its presence is the
+/// authoritative "there are saved sign-ins" signal — separate from the in-memory
+/// `active` flag (which only tracks a LIVE window) so the status chip and Clear button
+/// stay truthful after the window is closed or the app restarts. Removed with the
+/// profile by Clear.
+fn signin_marker(profile: &Path) -> PathBuf {
+    profile.join(".lolly-signed-in")
+}
+
+/// Has the user signed in at least once (a saved session persists on disk)?
+fn has_saved_signin(app: &AppHandle) -> bool {
+    capture_profile_path(app).is_ok_and(|p| signin_marker(&p).exists())
+}
+
 #[tauri::command]
-pub async fn capture_page(spec: CaptureSpec) -> Result<CaptureResult, String> {
+pub async fn capture_page(
+    app: AppHandle,
+    session: State<'_, CaptureSession>,
+    spec: CaptureSpec,
+) -> Result<CaptureResult, String> {
+    let profile = capture_profile_dir(&app)?;
+    let session = (*session).clone();
     // headless_chrome is blocking; keep it off the async runtime's threads.
-    tauri::async_runtime::spawn_blocking(move || capture_blocking(spec))
+    tauri::async_runtime::spawn_blocking(move || capture_blocking(&session, &profile, spec))
         .await
         .map_err(|e| format!("capture task panicked: {e}"))?
 }
 
 #[tauri::command]
-pub async fn capture_page_pdf(spec: CaptureSpec) -> Result<VectorResult, String> {
-    tauri::async_runtime::spawn_blocking(move || capture_pdf_blocking(spec))
+pub async fn capture_page_pdf(
+    app: AppHandle,
+    session: State<'_, CaptureSession>,
+    spec: CaptureSpec,
+) -> Result<VectorResult, String> {
+    let profile = capture_profile_dir(&app)?;
+    let session = (*session).clone();
+    tauri::async_runtime::spawn_blocking(move || capture_pdf_blocking(&session, &profile, spec))
         .await
         .map_err(|e| format!("capture task panicked: {e}"))?
+}
+
+/// Open (or raise) a VISIBLE Chrome window on the shared persistent profile, at `url`,
+/// so the user can sign in / accept cookies / set up the view. Everything they do there
+/// is written to the profile and ridden by later captures. GUI-only.
+#[tauri::command]
+pub async fn capture_signin_open(
+    app: AppHandle,
+    session: State<'_, CaptureSession>,
+    url: String,
+    width: Option<u32>,
+    height: Option<u32>,
+) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Only http(s) URLs can be opened for sign-in.".into());
+    }
+    let profile = capture_profile_dir(&app)?;
+    let session = (*session).clone();
+    let w = width.unwrap_or(1280).clamp(320, 3840);
+    let h = height.unwrap_or(900).clamp(320, 2400);
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let mut guard = session.lock();
+        // Open a tab for the login page. new_tab() is a round-trip to Chrome, so it
+        // doubles as the liveness probe: reuse the live session browser when it
+        // answers, else (no browser, or the user closed the window) relaunch once.
+        let tab = match guard.as_ref().map(|b| b.new_tab()) {
+            Some(Ok(tab)) => tab,
+            _ => {
+                let browser = launch_signin_browser(&profile, w, h)?;
+                let tab = browser.new_tab().map_err(|e| format!("sign-in tab: {e}"))?;
+                *guard = Some(browser);
+                session.active.store(true, Ordering::Relaxed);
+                tab
+            }
+        };
+        // Record that saved sign-ins now exist, so the status chip + Clear button
+        // survive closing this window (the auth lives on disk, not in this handle).
+        let _ = std::fs::write(signin_marker(&profile), b"1");
+        tab.navigate_to(&url).map_err(|e| format!("navigate: {e}"))?;
+        let _ = tab.bring_to_front();
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("sign-in task panicked: {e}"))?
+}
+
+/// Whether the user has a saved session captures will ride — a LIVE sign-in window OR a
+/// persisted profile from an earlier sign-in (the marker on disk). Drives the tool's
+/// "Signed-in session active" chip and whether Clear is offered. The atomic read is
+/// lock-free; the marker check is a single stat — neither blocks behind a capture.
+#[tauri::command]
+pub fn capture_session_active(app: AppHandle, session: State<'_, CaptureSession>) -> bool {
+    session.active.load(Ordering::Relaxed) || has_saved_signin(&app)
+}
+
+/// Close the live session browser and DELETE the persistent profile — a full sign-out
+/// wiping every stored cookie/site datum. GUI-only.
+#[tauri::command]
+pub async fn capture_clear_session(
+    app: AppHandle,
+    session: State<'_, CaptureSession>,
+) -> Result<(), String> {
+    let profile = capture_profile_path(&app)?;
+    let session = (*session).clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        // Hold the lock across the whole wipe so no capture (which also takes the lock
+        // before touching the profile) can launch Chrome on it mid-deletion.
+        let mut guard = session.lock();
+        *guard = None; // Drop → Chrome is killed, releasing the profile lock.
+        session.active.store(false, Ordering::Relaxed);
+        // Let the process exit and unlock the profile before removing its files.
+        std::thread::sleep(Duration::from_millis(300));
+        if profile.exists() {
+            std::fs::remove_dir_all(&profile).map_err(|e| format!("clear session: {e}"))?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("clear task panicked: {e}"))?
+}
+
+/// A VISIBLE Chrome on the persistent profile — the sign-in window.
+fn launch_signin_browser(profile: &Path, w: u32, h: u32) -> Result<Browser, String> {
+    let launch = LaunchOptions::default_builder()
+        .headless(false)
+        .user_data_dir(Some(profile.to_path_buf()))
+        .window_size(Some((w, h)))
+        .build()
+        .map_err(|e| format!("sign-in launch options: {e}"))?;
+    Browser::new(launch).map_err(|e| format!("open sign-in browser: {e}"))
+}
+
+/// Run `f` against a tab navigated + styled per `spec` — in the LIVE session browser
+/// (a background tab, riding the authenticated session) when one is up, else a fresh
+/// headless browser on the persistent profile. Serialised on the session lock for its
+/// whole duration (one capture at a time), which also keeps the shared cookie jar
+/// consistent. A session browser the user has since closed is dropped and the capture
+/// falls back to the headless path rather than failing.
+fn with_capture_tab<T>(
+    session: &CaptureSession,
+    profile: &Path,
+    spec: &CaptureSpec,
+    height: u32,
+    f: impl FnOnce(&Tab) -> Result<T, String>,
+) -> Result<T, String> {
+    valid_http_url(&spec.url)?;
+    let mut guard = session.lock();
+    // 1. A LIVE sign-in window? Ride it — a background tab shares its live cookie jar.
+    if guard.is_some() {
+        match guard.as_ref().unwrap().new_tab() {
+            Ok(tab) => {
+                tab.set_default_timeout(Duration::from_secs(30));
+                // Size the capture tab to the request WITHOUT resizing the visible
+                // sign-in window, so a 1280-wide shot lays out at 1280 regardless.
+                set_viewport(&tab, spec.width, height);
+                let out = prepare_tab(&tab, spec).and_then(|()| {
+                    // A backgrounded tab in a headful window has no live compositor
+                    // surface, so `captureScreenshot { from_surface: true }` would grab a
+                    // blank/stale frame. Foreground it for the shot (printToPDF re-lays-out
+                    // and does not care); the tab is closed again immediately after.
+                    let _ = tab.bring_to_front();
+                    f(&tab)
+                });
+                let _ = tab.close(false);
+                return out;
+            }
+            // new_tab fails when the session browser has gone (window closed / crashed):
+            // drop it, clear the flag, and fall through.
+            Err(_) => {
+                *guard = None;
+                session.active.store(false, Ordering::Relaxed);
+            }
+        }
+    }
+    // 2. No live window. If the user has SAVED sign-ins, capture headless on the shared
+    //    persistent profile — keeping the lock held so no second Chrome opens the same
+    //    `--user-data-dir` at once (Chrome refuses a locked profile). If they have not
+    //    signed in, keep the pre-feature behaviour EXACTLY: a throwaway temp profile per
+    //    launch (stateless, and safe to run concurrently — so release the lock first).
+    if signin_marker(profile).exists() {
+        let (_browser, tab) = open_page(spec, height, Some(profile))?;
+        return f(&tab); // lock held across the whole capture
+    }
+    drop(guard);
+    let (_browser, tab) = open_page(spec, height, None)?;
+    f(&tab)
+}
+
+/// Override the tab's viewport metrics (no visible-window resize) so a background
+/// capture tab lays the page out at the requested size. Best-effort.
+///
+/// `device_scale_factor` is fixed at 1 to MATCH the fresh-headless path (which never
+/// sets a DSF): the export dpr is applied downstream by the screenshot `clip.scale`
+/// (raster) — NOT by the layout DSF. Setting DSF = dpr here would both double-scale the
+/// PNG and make the page render at a different `devicePixelRatio` (different
+/// srcset/media-query branches) than a headless shot of the same spec.
+fn set_viewport(tab: &Tab, width: u32, height: u32) {
+    let _ = tab.call_method(Emulation::SetDeviceMetricsOverride {
+        width,
+        height,
+        device_scale_factor: 1.0,
+        mobile: false,
+        scale: None,
+        screen_width: None,
+        screen_height: None,
+        position_x: None,
+        position_y: None,
+        dont_set_visible_size: Some(true),
+        screen_orientation: None,
+        viewport: None,
+        display_feature: None,
+        device_posture: None,
+    });
 }
 
 // ── shared navigation path ──────────────────────────────────────────────────────
 
-/// Launch, open, navigate, inject the userstyle. The browser must outlive the tab.
-fn open_page(spec: &CaptureSpec, height: u32) -> Result<(Browser, Arc<Tab>), String> {
-    if !(spec.url.starts_with("http://") || spec.url.starts_with("https://")) {
-        return Err("Only http(s) URLs can be captured.".into());
+fn valid_http_url(url: &str) -> Result<(), String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        Ok(())
+    } else {
+        Err("Only http(s) URLs can be captured.".into())
     }
+}
 
-    let launch = LaunchOptions::default_builder()
-        .window_size(Some((spec.width, height)))
-        .build()
-        .map_err(|e| format!("launch options: {e}"))?;
+/// Launch a fresh HEADLESS browser, open + navigate a tab, inject the userstyle. The
+/// browser must outlive the tab. `profile` binds the launch to the persistent capture
+/// profile (so a sign-in from an earlier run applies); `None` keeps the old throwaway
+/// temp profile.
+fn open_page(
+    spec: &CaptureSpec,
+    height: u32,
+    profile: Option<&Path>,
+) -> Result<(Browser, Arc<Tab>), String> {
+    valid_http_url(&spec.url)?;
+
+    let mut builder = LaunchOptions::default_builder();
+    builder.window_size(Some((spec.width, height)));
+    if let Some(dir) = profile {
+        builder.user_data_dir(Some(dir.to_path_buf()));
+    }
+    let launch = builder.build().map_err(|e| format!("launch options: {e}"))?;
 
     let browser = Browser::new(launch).map_err(|e| format!("launch chrome: {e}"))?;
     let tab = browser.new_tab().map_err(|e| format!("new tab: {e}"))?;
     tab.set_default_timeout(Duration::from_secs(30));
+    prepare_tab(&tab, spec)?;
+    Ok((browser, tab))
+}
 
+/// Navigate a tab to `spec.url`, wait for load, and inject the custom CSS. Shared by
+/// the fresh-browser and live-session capture paths so both style the page identically.
+fn prepare_tab(tab: &Tab, spec: &CaptureSpec) -> Result<(), String> {
     tab.navigate_to(&spec.url)
         .map_err(|e| format!("navigate: {e}"))?;
     tab.wait_until_navigated()
@@ -168,7 +437,7 @@ fn open_page(spec: &CaptureSpec, height: u32) -> Result<(Browser, Arc<Tab>), Str
         }
     }
 
-    Ok((browser, tab))
+    Ok(())
 }
 
 /// Page geometry, measured in the page itself (CSS px).
@@ -194,13 +463,23 @@ fn clamp_inset(v: f64) -> f64 {
     if v.is_finite() { v.clamp(0.0, 0.9) } else { 0.0 }
 }
 
-fn capture_blocking(spec: CaptureSpec) -> Result<CaptureResult, String> {
+fn capture_blocking(
+    session: &CaptureSession,
+    profile: &Path,
+    spec: CaptureSpec,
+) -> Result<CaptureResult, String> {
+    let vh = spec.height.unwrap_or((spec.width * 9 / 16).max(1)).max(1);
+    with_capture_tab(session, profile, &spec, vh, |tab| run_raster(tab, &spec))
+}
+
+/// Measure the page, resolve the framed clip (scroll depth + crop + range), and grab
+/// the PNG. Runs on a prepared tab from either capture path.
+fn run_raster(tab: &Tab, spec: &CaptureSpec) -> Result<CaptureResult, String> {
     let vw = spec.width.max(1) as f64;
     let vh = spec.height.unwrap_or((spec.width * 9 / 16).max(1)).max(1) as f64;
     let scale = spec.dpr.filter(|d| *d > 0.0).unwrap_or(1.0);
 
-    let (_browser, tab) = open_page(&spec, vh as u32)?;
-    let (pw, ph, real_vh) = measure(&tab);
+    let (pw, ph, real_vh) = measure(tab);
     // The window was launched at the requested size, but measure the truth (the
     // headless window may quantise) and fall back to the request when blocked.
     let vh = if real_vh > 0.0 { real_vh } else { vh };
@@ -260,11 +539,20 @@ fn capture_blocking(spec: CaptureSpec) -> Result<CaptureResult, String> {
     })
 }
 
-fn capture_pdf_blocking(spec: CaptureSpec) -> Result<VectorResult, String> {
+fn capture_pdf_blocking(
+    session: &CaptureSession,
+    profile: &Path,
+    spec: CaptureSpec,
+) -> Result<VectorResult, String> {
+    let vh = spec.height.unwrap_or((spec.width * 9 / 16).max(1)).max(1);
+    with_capture_tab(session, profile, &spec, vh, |tab| run_pdf(tab, &spec))
+}
+
+/// Print the page to a vector PDF (screen media, full-page). Runs on a prepared tab
+/// from either capture path.
+fn run_pdf(tab: &Tab, spec: &CaptureSpec) -> Result<VectorResult, String> {
     let vw = spec.width.max(1) as f64;
     let vh = spec.height.unwrap_or((spec.width * 9 / 16).max(1)).max(1);
-
-    let (_browser, tab) = open_page(&spec, vh)?;
 
     // Print with SCREEN styles — without this, @media print rules (and Chrome's
     // print defaults) restyle the page and the "screenshot" stops looking like
@@ -284,7 +572,7 @@ fn capture_pdf_blocking(spec: CaptureSpec) -> Result<VectorResult, String> {
     let _ = tab.evaluate("window.scrollTo(0, 0);", false);
     std::thread::sleep(Duration::from_millis(spec.wait_ms.unwrap_or(500)));
 
-    let (pw, ph, _vh) = measure(&tab);
+    let (pw, ph, _vh) = measure(tab);
     let ph = if ph > 0.0 { ph.min(MAX_PDF_H) } else { f64::from(vh) };
 
     // One tall page, paper sized to the viewport width × the full page height

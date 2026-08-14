@@ -87,8 +87,10 @@ fn infer(model_path: PathBuf, edge: usize, input: Vec<f32>) -> Result<Vec<f32>, 
 
     let tensor = Tensor::from_array(([1_usize, 3, edge, edge], input))
         .map_err(|e| format!("build input tensor: {e}"))?;
+    // `ort::inputs!` returns the input vec directly in ort 2.0.0-rc.10 (it was a Result in
+    // earlier rcs); `run` takes it straight.
     let outputs = session
-        .run(ort::inputs![input_name.as_str() => tensor].map_err(|e| format!("bind inputs: {e}"))?)
+        .run(ort::inputs![input_name.as_str() => tensor])
         .map_err(|e| format!("ort run: {e}"))?;
 
     // Single-channel logit/prob mask, edge*edge f32 — the JS side activates + composes.

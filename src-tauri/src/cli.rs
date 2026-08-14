@@ -264,6 +264,10 @@ pub fn run_cli(mut context: tauri::Context, job: CliJob) {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .manage(job)
+        // The capture commands read a shared CaptureSession from state; a headless CLI
+        // render never signs in, so it stays empty and captures fall back to a fresh
+        // headless browser on the persistent profile (which a prior GUI sign-in fills).
+        .manage(crate::capture::CaptureSession::default())
         .invoke_handler(tauri::generate_handler![
             crate::capture::capture_page,
             crate::capture::capture_page_pdf,

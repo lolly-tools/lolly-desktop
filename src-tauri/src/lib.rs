@@ -1,6 +1,8 @@
 mod capture;
 mod cli;
 mod matte;
+mod native_transport;
+mod nearby;
 mod site_fetch;
 
 /// Native entry (called from `main.rs`, and the mobile entry point). Reads argv
@@ -42,9 +44,19 @@ fn run_gui(context: tauri::Context) {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
+        // The shared authenticated-capture session (persistent Chrome profile + the
+        // optional live sign-in browser captures ride). Managed here so both the
+        // capture commands and the sign-in/clear commands see the same instance.
+        .manage(capture::CaptureSession::default())
         .invoke_handler(tauri::generate_handler![
             capture::capture_page,
             capture::capture_page_pdf,
+            // Authenticated capture: open a visible sign-in window on the shared
+            // profile, report whether a session is live, and clear it. GUI only —
+            // interactive, like site_fetch/nearby; a headless render never signs in.
+            capture::capture_signin_open,
+            capture::capture_session_active,
+            capture::capture_clear_session,
             matte::matte_infer,
             // Website source for the Design System studio (plans/97 §9). GUI
             // only, deliberately: unlike capture, which cli.rs also registers
@@ -52,7 +64,25 @@ fn run_gui(context: tauri::Context) {
             // command is reachable only from a button in the studio. A headless
             // `Lolly run <tool>` render can never invoke it, so registering it
             // there would be dead surface.
-            site_fetch::site_fetch
+            site_fetch::site_fetch,
+            // Nearby discovery (plans/110 §3). GUI only for the same reason as
+            // site_fetch: it is reachable from the collab ceremony / share sheets,
+            // never from a headless render, so it stays out of cli.rs's handler.
+            nearby::nearby_set_visible,
+            nearby::nearby_hide,
+            nearby::nearby_browse,
+            nearby::nearby_poll,
+            nearby::nearby_exchange_invite,
+            nearby::nearby_send_reply,
+            nearby::nearby_decline,
+            // Native LAN socket transport (plans/110 §4) — GUI only, same reason.
+            native_transport::native_connect,
+            native_transport::native_send,
+            native_transport::native_recv,
+            native_transport::native_plate,
+            native_transport::native_close,
+            native_transport::native_poll_inbound,
+            native_transport::native_adopt
         ])
         .run(context)
         .expect("error while running Lolly desktop");
