@@ -179,6 +179,34 @@ fn has_saved_signin(app: &AppHandle) -> bool {
     capture_profile_path(app).is_ok_and(|p| signin_marker(&p).exists())
 }
 
+/// Is the persistent profile currently held by a LIVE Chrome? Chrome writes a
+/// `SingletonLock` symlink (`<host>-<pid>`); while the holder runs, a SECOND Chrome
+/// launched on the same `--user-data-dir` cannot get the lock, exits without publishing
+/// its DevTools port, and `Browser::new` then HANGS waiting for it (observed: a capture
+/// blocks for the whole beforeExport budget). We only ever launch a fresh browser on the
+/// profile from the headless fallback (the live sign-in window is ridden via new_tab
+/// instead), so testing the lock there lets that case fail FAST with a clear message
+/// rather than hang. A stale/absent lock — which Chrome cleans up itself on the next
+/// real launch — reads as free.
+fn profile_locked(profile: &Path) -> bool {
+    let Ok(target) = std::fs::read_link(profile.join("SingletonLock")) else {
+        return false; // no lock → free
+    };
+    let Some(pid) = target
+        .to_str()
+        .and_then(|s| s.rsplit('-').next())
+        .and_then(|p| p.parse::<u32>().ok())
+    else {
+        return false; // unparseable lock → treat as free, let Chrome sort it out
+    };
+    // `kill -0` probes existence without delivering a signal: success ⇒ holder alive.
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 #[tauri::command]
 pub async fn capture_page(
     app: AppHandle,
@@ -344,6 +372,15 @@ fn with_capture_tab<T>(
     //    signed in, keep the pre-feature behaviour EXACTLY: a throwaway temp profile per
     //    launch (stateless, and safe to run concurrently — so release the lock first).
     if signin_marker(profile).exists() {
+        // Fail fast on a locked profile (an orphaned capture, or the sign-in window
+        // still open in another process) — launching a second Chrome on it would hang.
+        if profile_locked(profile) {
+            return Err(
+                "The saved sign-in is in use by an open browser window. Close the \
+                 sign-in window, then capture again."
+                    .into(),
+            );
+        }
         let (_browser, tab) = open_page(spec, height, Some(profile))?;
         return f(&tab); // lock held across the whole capture
     }

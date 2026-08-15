@@ -5,6 +5,9 @@ mod native_transport;
 mod nearby;
 mod site_fetch;
 
+use tauri::menu::{Menu, MenuItem, Submenu};
+use tauri::Manager;
+
 /// Native entry (called from `main.rs`, and the mobile entry point). Reads argv
 /// and dispatches to either the GUI or a headless CLI render.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,6 +51,35 @@ fn run_gui(context: tauri::Context) {
         // optional live sign-in browser captures ride). Managed here so both the
         // capture commands and the sign-in/clear commands see the same instance.
         .manage(capture::CaptureSession::default())
+        // Add "Open Exports Folder" to the menu bar (exports land in ~/Downloads/Lolly —
+        // bridge-overrides/export.ts). Placed in the Window menu (Andy's ask); falls back
+        // to a top-level "Exports" menu if a platform's default menu has no Window submenu.
+        .menu(|handle| {
+            let menu = Menu::default(handle)?;
+            let open_exports =
+                MenuItem::with_id(handle, "open_exports", "Open Exports Folder", true, None::<&str>)?;
+            let mut placed = false;
+            if let Ok(items) = menu.items() {
+                for item in &items {
+                    if let Some(sub) = item.as_submenu() {
+                        if sub.text().ok().as_deref() == Some("Window") {
+                            let _ = sub.append(&open_exports);
+                            placed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if !placed {
+                menu.append(&Submenu::with_items(handle, "Exports", true, &[&open_exports])?)?;
+            }
+            Ok(menu)
+        })
+        .on_menu_event(|app, event| {
+            if event.id() == "open_exports" {
+                open_exports_folder(app);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             capture::capture_page,
             capture::capture_page_pdf,
@@ -86,4 +118,21 @@ fn run_gui(context: tauri::Context) {
         ])
         .run(context)
         .expect("error while running Lolly desktop");
+}
+
+/// Reveal the exports folder in the OS file manager. Exports save to
+/// `~/Downloads/Lolly` (bridge-overrides/export.ts `saveToDownloads`); create it if the
+/// user has not exported anything yet, then open it. Best-effort — a menu click never errors.
+fn open_exports_folder(app: &tauri::AppHandle) {
+    let Ok(downloads) = app.path().download_dir() else {
+        return;
+    };
+    let dir = downloads.join("Lolly");
+    let _ = std::fs::create_dir_all(&dir);
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(&dir).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = std::process::Command::new("xdg-open").arg(&dir).spawn();
 }
