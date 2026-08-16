@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Filesystem-backed state for the Tauri DESKTOP shell — the platform seam only.
+ * Filesystem-backed state for the Tauri DESKTOP shell - the platform seam only.
  *
  * Replaces the IndexedDB state bridge (shells/web/src/bridge/state.ts) at build
  * time via the resolveId override in vite.config.js. The API surface must stay in
- * sync with that file — tools, the engine, the gallery and catalog sync never see
+ * sync with that file - tools, the engine, the gallery and catalog sync never see
  * which implementation is running, so a missing method (e.g. sizes) crashes boot.
  *
  * Storage: $APPDATA/Lolly/saved-state/<slot>.json
@@ -41,7 +41,7 @@ const appDataFs: StateFs = {
   remove: (path) => remove(path, { baseDir: BaseDirectory.AppData }),
 };
 
-// createStateAPI signature matches the web shell (db param ignored — not needed here).
+// createStateAPI signature matches the web shell (db param ignored - not needed here).
 export function createStateAPI(_db: StateDb): WebStateAPI {
   return createFsStateAPI(appDataFs);
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * CaptureAPI (Tauri desktop) — page-to-image AND page-to-vector capture.
+ * CaptureAPI (Tauri desktop) - page-to-image AND page-to-vector capture.
  *
  * Replaces the web shell's throwing stub (shells/web/src/bridge/capture.ts) at
  * build time via vite.config.js's resolveId override. Where a browser page can't
@@ -15,7 +15,7 @@
  *   vector(spec) → true vector. Native `capture_page_pdf` prints the page to a
  *                  vector PDF; we convert it to a standalone SVG through the
  *                  engine's PDF interpreter (the same path a .ai/.pdf upload
- *                  takes) and WINDOW it — scroll depth, crop insets and the range
+ *                  takes) and WINDOW it - scroll depth, crop insets and the range
  *                  extension become viewBox geometry, so a vector shot frames
  *                  identical content to a raster shot of the same spec.
  *
@@ -30,13 +30,13 @@ import type { AssetRef, CaptureAPI, CaptureSpec } from '@lolly-tools/core/host-v
 /**
  * What the two native commands hand back. These MIRROR `CaptureResult` and
  * `VectorResult` in src-tauri/src/capture.rs, which serialise with serde
- * `rename_all = "camelCase"` — nothing checks the two sides against each other, so
+ * `rename_all = "camelCase"` - nothing checks the two sides against each other, so
  * a field renamed in Rust has to be renamed here by hand. Both `data` fields are
  * base64 (PNG / PDF) exactly as CDP returned them.
  */
 interface NativeCaptureResult {
   data: string;
-  /** Captured box in CSS px — crop applied, range extension included. */
+  /** Captured box in CSS px - crop applied, range extension included. */
   width: number;
   height: number;
   /** The cropped viewport height alone; height − frameHeight is the pan distance. */
@@ -58,9 +58,9 @@ interface NativeVectorResult {
 // url-shot captures in beforeExport, which the runtime time-boxes at
 // HOOK_BUDGET_MS.beforeExport (default 5s) and FAILS the export on overrun. A real
 // capture is a headless navigation (Rust caps it at 30s) + a settle delay the user
-// sets up to 15s + printToPDF + PDF→SVG — well past 5s, so with the default budget
+// sets up to 15s + printToPDF + PDF→SVG - well past 5s, so with the default budget
 // any non-trivial capture (or any waitMs > 5s) would time out and fail. HOOK_BUDGET_MS
-// is exported mutable for exactly this — "shells with unusual needs, e.g. a long
+// is exported mutable for exactly this - "shells with unusual needs, e.g. a long
 // page-capture beforeExport" (runtime.ts). Raise it here, at desktop bridge load
 // (the boot chunk, before any export), sized to cover the worst-case chain. Desktop
 // only: the web stub throws instantly, so it never needs the longer wait.

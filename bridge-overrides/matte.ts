@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Desktop matte override — the whole reason the full BiRefNet exists as a tier.
+ * Desktop matte override - the whole reason the full BiRefNet exists as a tier.
  *
  * The full BiRefNet (Swin-L @1024²) cannot run in the browser/CLI: ort-web is a
  * single-thread wasm32 module, and the model's upcast fp32 weights (~490 MB fp16 →
  * ~980 MB) plus a Swin-L's activations blow past the ~4 GB wasm32 address ceiling,
- * so `session.run()` aborts with std::bad_alloc — on effectively ANY device (it's
+ * so `session.run()` aborts with std::bad_alloc - on effectively ANY device (it's
  * an address-space limit, not a RAM one). It runs fine under NATIVE ONNX Runtime
  * (onnxruntime-node proved it: ~18 s CPU), which is exactly what the desktop shell
  * can host. So this override routes the ONE native-only model (MATTE_NATIVE_ONLY)
@@ -17,7 +17,7 @@
  * so bridge/index.ts's `import('./matte.ts')` site is byte-identical.
  *
  * The pre/post geometry is imported from the web runner (lib/matter.ts), so the
- * letterbox/normalize/compose math has one source of truth across wasm and native —
+ * letterbox/normalize/compose math has one source of truth across wasm and native - 
  * only the inference call in the middle differs. Model bytes come through the SAME
  * fetch-once/IndexedDB cache the wasm path and the offline manager use; the native
  * side just needs the file on disk, so we materialise it once into app-data and let
@@ -46,14 +46,14 @@ const fetchModelBytes = createModelFetcher({
 });
 
 /** The app-data directory (relative to BaseDirectory.AppData) the native ORT session
- *  loads models from — mirrors the `/models/<dir>/` fetch layout. Rust resolves the
+ *  loads models from - mirrors the `/models/<dir>/` fetch layout. Rust resolves the
  *  SAME path via app_data_dir().join("models").join(dir). */
 const MATTE_MODEL_APPDATA_DIR = `models/${MATTE_MODEL_DIR}`;
 
 const isNativeModel = (id?: MatteModelId): boolean => MATTE_NATIVE_ONLY[id ?? MATTE_DEFAULT_MODEL] === true;
 
 // Native ORT handles the fixed 1024² model comfortably; these only rule out an
-// absurd OUTPUT (the cutout is the source size, capped by maxEdge) — mirrors the
+// absurd OUTPUT (the cutout is the source size, capped by maxEdge) - mirrors the
 // abs guards in lib/matter.ts canRun so behaviour is consistent across backends.
 const ABS_MAX_EDGE = 12000;
 const ABS_MAX_PIXELS = 40_000_000;
@@ -73,7 +73,7 @@ function canRunNative(src: { width: number; height: number }, opts: MatteOpts = 
 }
 
 /** Are the model's bytes available locally (disk OR the IndexedDB cache)? Never
- *  downloads — the consent line and offline manager own that. */
+ *  downloads - the consent line and offline manager own that. */
 async function nativeModelCached(id: MatteModelId): Promise<boolean> {
   const file = MATTE_MODEL_FILES[id];
   try {
@@ -85,7 +85,7 @@ async function nativeModelCached(id: MatteModelId): Promise<boolean> {
 /** Ensure the model file is on disk for native ORT, downloading (with progress)
  *  into the shared IndexedDB cache first if needed, then materialising it once into
  *  app-data. Returns false when the bytes aren't on device and can't be fetched
- *  (offline / not vendored) — the caller turns that into ModelNotInstalledError. */
+ *  (offline / not vendored) - the caller turns that into ModelNotInstalledError. */
 async function ensureModelOnDisk(
   id: MatteModelId, onDownload?: (p: FetchProgress) => void, signal?: AbortSignal,
 ): Promise<boolean> {
@@ -111,7 +111,7 @@ async function ensureModelOnDisk(
  *  square edge in headers; Rust resolves the model path, runs the cached session,
  *  and returns the raw single-channel mask as f32 bytes. */
 async function invokeMatteInfer(file: string, edge: number, input: Float32Array): Promise<Float32Array> {
-  // A Uint8Array view of exactly the tensor's bytes — Tauri sends it as the raw
+  // A Uint8Array view of exactly the tensor's bytes - Tauri sends it as the raw
   // request body (InvokeBody::Raw on the Rust side), no JSON array serialization.
   const body = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
   const out = await invoke<ArrayBuffer>('matte_infer', body, {

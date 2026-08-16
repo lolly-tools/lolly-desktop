@@ -13,15 +13,15 @@
  *   }
  *
  * `has_download_handler` is `attributes.download_started_handler.is_some()`, and we
- * register none — so every export was silently cancelled on desktop, the same class
+ * register none - so every export was silently cancelled on desktop, the same class
  * of bug as the mobile shell's (which the Android WebView dropped instead).
  *
  * So we wrap the web ExportAPI and replace ONLY `download`/`file` (the delivery
  * verbs) with a real save via tauri-plugin-fs. `render()` and everything else are
- * inherited unchanged — the rasteriser is identical. Files land in the user's real
+ * inherited unchanged - the rasteriser is identical. Files land in the user's real
  * Downloads (a "Lolly" subfolder); the user gets a toast confirming.
  *
- * Unlike mobile — where Downloads is an app-private dir only we write to — macOS
+ * Unlike mobile - where Downloads is an app-private dir only we write to - macOS
  * BaseDirectory.Download is the user's own shared ~/Downloads. So we de-collide
  * rather than overwrite, matching both browser and wry's native download semantics
  * ("qr.png" → "qr (1).png").
@@ -40,7 +40,7 @@ declare global {
 }
 
 // This override REPLACES the whole web export module for every importer inside
-// bridge/, not just for the bridge index — so it must carry that module's full
+// bridge/, not just for the bridge index - so it must carry that module's full
 // public surface, or a sibling importing one of its other exports fails the build
 // (export-pptx.ts pulls rasterizeNodeToDataUrl, _host, pureRotationDeg, …).
 // The star re-export forwards LIVE bindings, which `_host` (an `export let` the
@@ -121,8 +121,8 @@ async function saveToDownloads(blob: Blob, filename: string | undefined, host: E
 
 /**
  * Headless-CLI delivery. When the binary is running a `Lolly run <tool>` job (see
- * src-tauri/src/cli.rs), the finished bytes go straight to Rust — which writes them
- * to the path the user asked for (or stdout) — instead of into Downloads. On success
+ * src-tauri/src/cli.rs), the finished bytes go straight to Rust - which writes them
+ * to the path the user asked for (or stdout) - instead of into Downloads. On success
  * `cli_done` ends the process (exit 0); on failure `cli_fail` prints and exits 1.
  * This is what turns the auto-export deep link the CLI navigates to into a file on
  * disk. Bytes cross as a plain number[] (Tauri serialises it to Vec<u8>); fine for
