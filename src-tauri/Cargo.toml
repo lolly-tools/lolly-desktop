@@ -28,12 +28,12 @@ headless_chrome = "1"
 # is not a frontendDist asset, so the ~2 GB `ar` archive-offset trap the README
 # documents for embedded models does not apply.
 ort = "=2.0.0-rc.10"
-# Nearby discovery (src/nearby.rs, plans/110 §3): pure-Rust mDNS/DNS-SD, no Bonjour
+# Nearby discovery (src/nearby.rs, plans/110 section 3): pure-Rust mDNS/DNS-SD, no Bonjour
 # daemon and no C dependency, so it builds the same on macOS/Linux/Windows. Runs its
 # own background thread; the invite exchange itself is plain std::net TCP, no async
 # runtime added.
 mdns-sd = "0.11"
-# Native LAN socket transport (src/native_transport.rs, plans/110 §4): Noise
+# Native LAN socket transport (src/native_transport.rs, plans/110 section 4): Noise
 # XX_25519_ChaChaPoly_BLAKE2s. The pure-Rust resolver (no `ring`/C dependency) keeps
 # cross-compilation to Linux/Windows/macOS — and later the Android NDK — unchanged.
 snow = { version = "0.9", default-features = false, features = ["default-resolver"] }

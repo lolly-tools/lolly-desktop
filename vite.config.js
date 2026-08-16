@@ -137,7 +137,7 @@ export default defineConfig({
       // Rust ORT command; other models delegate to the shared wasm runner.
       'matte': resolve(__dirname, 'bridge-overrides/matte.ts'),
       // Native website read for the Design System studio's Website source
-      // (plans/97 §9): a Rust `site_fetch` command, no CSP and no CORS in the
+      // (plans/97 section 9): a Rust `site_fetch` command, no CSP and no CORS in the
       // way. The web module this replaces is the one WITHOUT a transport — a
       // browser page cannot fetch a third-party origin, so on a plain PWA the
       // studio never renders the tile.

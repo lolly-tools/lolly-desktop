@@ -90,14 +90,14 @@ fn run_gui(context: tauri::Context) {
             capture::capture_session_active,
             capture::capture_clear_session,
             matte::matte_infer,
-            // Website source for the Design System studio (plans/97 §9). GUI
+            // Website source for the Design System studio (plans/97 section 9). GUI
             // only, deliberately: unlike capture, which cli.rs also registers
             // because the url-shot TOOL calls host.capture mid-render, this
             // command is reachable only from a button in the studio. A headless
             // `Lolly run <tool>` render can never invoke it, so registering it
             // there would be dead surface.
             site_fetch::site_fetch,
-            // Nearby discovery (plans/110 §3). GUI only for the same reason as
+            // Nearby discovery (plans/110 section 3). GUI only for the same reason as
             // site_fetch: it is reachable from the collab ceremony / share sheets,
             // never from a headless render, so it stays out of cli.rs's handler.
             nearby::nearby_set_visible,
@@ -107,7 +107,7 @@ fn run_gui(context: tauri::Context) {
             nearby::nearby_exchange_invite,
             nearby::nearby_send_reply,
             nearby::nearby_decline,
-            // Native LAN socket transport (plans/110 §4) — GUI only, same reason.
+            // Native LAN socket transport (plans/110 section 4) — GUI only, same reason.
             native_transport::native_connect,
             native_transport::native_send,
             native_transport::native_recv,

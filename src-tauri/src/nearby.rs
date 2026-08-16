@@ -1,10 +1,10 @@
-//! Nearby discovery — the desktop half of plans/110 §3.
+//! Nearby discovery — the desktop half of plans/110 section 3.
 //!
 //! A PWA cannot see other devices on a network; a Tauri process can. This module
 //! advertises the running app over mDNS/DNS-SD (`_lolly._tcp.local.`) and browses
 //! for other Lolly devices, so the collab ceremony can hand an invite to a peer by
 //! TAPPING A NAME instead of scanning a QR. It is the transport of the invite only —
-//! the ceremony's matching plates still authenticate every pairing (plan 100 §11.23),
+//! the ceremony's matching plates still authenticate every pairing (plan 100 section 11.23),
 //! because mDNS is unauthenticated and anyone on a café network can advertise any
 //! name. "Discoverable" is never "trusted", and nothing here weakens the ceremony.
 //!
@@ -12,12 +12,12 @@
 //!   • mDNS advert: service `_lolly._tcp.local.`, a per-window RANDOM instance name
 //!     (a stable one would be a cross-network tracking beacon), and a TXT record of
 //!     exactly `v`/`n` (chosen display name, ≤ NAME_CAP)/`k` (device kind). No email,
-//!     no profile identity, no stable id (plan 100 §11.23).
+//!     no profile identity, no stable id (plan 100 section 11.23).
 //!   • Invite exchange: a single length-prefixed JSON frame each way over a
 //!     short-lived TCP connection to the advertised port — `invite {token}` in,
 //!     `reply {token}` or `decline` back. The tokens are the SAME opaque blobs a QR
 //!     carries today; this module never inspects them. It is NOT a data transport
-//!     (that is the native socket transport of plans/110 §4, a later wave) and it
+//!     (that is the native socket transport of plans/110 section 4, a later wave) and it
 //!     carries exactly one message each way before closing.
 //!
 //! UNTRUSTED INPUT
@@ -64,7 +64,7 @@ const INVITE_DECISION_TIMEOUT: Duration = Duration::from_secs(180);
 const FRAME_READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// Connect timeout when we initiate an exchange to a discovered peer.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
-/// How long a minted invite stays valid (plans/110 §5, Andy 2026-08-13: invite expiry).
+/// How long a minted invite stays valid (plans/110 section 5, Andy 2026-08-13: invite expiry).
 /// The exchange is LIVE (the peer connected just now), so this is short — it bounds the
 /// window a captured invite frame could be replayed within.
 const INVITE_TTL_MS: u64 = 2 * 60_000;
@@ -106,7 +106,7 @@ struct Peer {
     addr: std::net::IpAddr,
     port: u16,
     /// The peer's native-transport listener port (TXT `t`), or 0 if it offers none
-    /// (plans/110 §4). Used by native_transport::native_connect via resolve_transport.
+    /// (plans/110 section 4). Used by native_transport::native_connect via resolve_transport.
     transport_port: u16,
 }
 
@@ -227,7 +227,7 @@ pub fn nearby_set_visible(name: String) -> Result<(), String> {
     }
 
     // Bring up the native-transport listener too, and advertise its port in TXT `t`, so a
-    // peer that discovers us can open the Noise socket (plans/110 §4).
+    // peer that discovers us can open the Noise socket (plans/110 section 4).
     let transport_port = crate::native_transport::ensure_transport_listener().unwrap_or(0);
 
     let instance = gen_instance_name();
@@ -260,7 +260,7 @@ pub fn nearby_hide() -> Result<(), String> {
 }
 
 /// Start or stop browsing for peers. Browsing is independent of advertising (you can
-/// look without being seen — plan 110 §3.1).
+/// look without being seen — plan 110 section 3.1).
 #[tauri::command]
 pub fn nearby_browse(on: bool) -> Result<(), String> {
     let mut st = state().lock().map_err(|_| "nearby state poisoned")?;
@@ -502,7 +502,7 @@ fn exchange_blocking(addr: std::net::IpAddr, port: u16, token: &str) -> Result<S
     stream
         .set_read_timeout(Some(INVITE_DECISION_TIMEOUT))
         .map_err(|e| format!("{e}"))?;
-    // Mint a fresh single-use nonce + expiry for this invite (plans/110 §5).
+    // Mint a fresh single-use nonce + expiry for this invite (plans/110 section 5).
     let exp = now_ms() + INVITE_TTL_MS;
     let nonce = gen_token(16);
     write_frame(&mut stream, &encode_invite(token, exp, &nonce))
@@ -519,7 +519,7 @@ fn exchange_blocking(addr: std::net::IpAddr, port: u16, token: &str) -> Result<S
 // ── pure wire helpers (unit tested) ──────────────────────────────────────────
 
 /// The messages that cross an invite exchange. Nothing else is a valid frame. An invite
-/// carries an expiry (`exp`, epoch ms) and a single-use `nonce` (plans/110 §5).
+/// carries an expiry (`exp`, epoch ms) and a single-use `nonce` (plans/110 section 5).
 #[derive(Debug, PartialEq)]
 enum Message {
     Invite { token: String, exp: u64, nonce: String },
@@ -646,7 +646,7 @@ fn txt_props(name: &str, transport_port: u16) -> Vec<(String, String)> {
         ("v".to_string(), "1".to_string()),
         ("n".to_string(), clamp_name(name)),
         ("k".to_string(), "d".to_string()),
-        // The native-transport listener port (plans/110 §4), so a peer can open the
+        // The native-transport listener port (plans/110 section 4), so a peer can open the
         // Noise socket after discovering us. 0 ⇒ no native transport offered.
         ("t".to_string(), transport_port.to_string()),
     ]

@@ -1,9 +1,9 @@
 //! Native site fetch — transport 1 of the Design System studio's website source
-//! (plans/97 §9 / SS9).
+//! (plans/97 section 9 / SS9).
 //!
 //! The deployed PWA cannot fetch a third-party origin at all: `connect-src`
 //! allowlists six hosts, so a website ingest dies at CSP before CORS is even
-//! asked. The decision recorded in plan 97 §9 is that no server-side fetch is
+//! asked. The decision recorded in plan 97 section 9 is that no server-side fetch is
 //! ever built for it — so the feature exists ONLY where a real transport does,
 //! and this is one of the two (the other is the Chrome extension). Nothing here
 //! is a fallback for the web shell; the web shell simply does not offer the
@@ -63,7 +63,7 @@ use tauri_plugin_http::reqwest::{header, redirect::Policy, Client, Url};
 
 /// Ceiling on the page HTML. Real pages are ≤ 1 MB; this is the hostile bound.
 const MAX_HTML_BYTES: usize = 8 * 1024 * 1024;
-/// Total stylesheet budget across every sheet (plan 97 §9's 4 MB cap).
+/// Total stylesheet budget across every sheet (plan 97 section 9's 4 MB cap).
 const MAX_CSS_TOTAL_BYTES: usize = 4 * 1024 * 1024;
 /// Per-sheet ceiling, so one enormous sheet cannot eat the whole budget.
 const MAX_CSS_BYTES: usize = 2 * 1024 * 1024;

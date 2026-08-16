@@ -1,4 +1,4 @@
-//! Native LAN socket transport — the Noise-over-TCP collab transport (plans/110 §4,
+//! Native LAN socket transport — the Noise-over-TCP collab transport (plans/110 section 4,
 //! `plans/110-work/n2-design.md`), for the case WebRTC is absent (Linux webkitgtk) or a
 //! power user forces LAN. This is the CORE (handshake, framing, address policy); the
 //! socket-lifecycle wiring into the collab provider is the device-verified integration
@@ -314,7 +314,7 @@ fn finish_session(stream: TcpStream, hs: HandshakeState) -> Result<NativeSession
 }
 
 /// Connect to a discovered peer and complete the handshake. **The socket-open is gated on
-/// `is_private_addr`** (plans/110 §5, Andy 2026-08-13): the address comes from an mDNS
+/// `is_private_addr`** (plans/110 section 5, Andy 2026-08-13): the address comes from an mDNS
 /// advert, and must additionally be private/link-local/loopback, so a poisoned advert can
 /// never aim the connect at a public or internal-service host.
 pub fn connect(addr: IpAddr, port: u16) -> Result<NativeSession, String> {
