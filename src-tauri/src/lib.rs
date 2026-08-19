@@ -3,6 +3,7 @@ mod cli;
 mod matte;
 mod native_transport;
 mod nearby;
+mod reword;
 mod site_fetch;
 
 use tauri::menu::{Menu, MenuItem, Submenu};
@@ -90,6 +91,13 @@ fn run_gui(context: tauri::Context) {
             capture::capture_session_active,
             capture::capture_clear_session,
             matte::matte_infer,
+            // Native reword (plans/127): the SmolLM2 sampling loop on native ORT —
+            // probe/stage/generate; the JS side owns consent + the engine gate.
+            // GUI only, like site_fetch: it is reachable only from the catalog's
+            // humanize panel, never from a headless render.
+            reword::reword_probe,
+            reword::reword_put_file,
+            reword::reword_generate,
             // Website source for the Design System studio (plans/97 section 9). GUI
             // only, deliberately: unlike capture, which cli.rs also registers
             // because the url-shot TOOL calls host.capture mid-render, this
