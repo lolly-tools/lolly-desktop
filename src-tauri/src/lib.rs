@@ -3,6 +3,7 @@ mod cli;
 mod matte;
 mod native_transport;
 mod nearby;
+mod oauth;
 mod reword;
 mod site_fetch;
 
@@ -52,6 +53,9 @@ fn run_gui(context: tauri::Context) {
         // optional live sign-in browser captures ride). Managed here so both the
         // capture commands and the sign-in/clear commands see the same instance.
         .manage(capture::CaptureSession::default())
+        // Loopback OAuth listeners (plans/129 WP4) — the system-browser sign-in
+        // return leg for personal send targets. GUI only, like site_fetch.
+        .manage(oauth::OauthListeners::default())
         // Add "Open Exports Folder" to the menu bar (exports land in ~/Downloads/Lolly —
         // bridge-overrides/export.ts). Placed in the Window menu (Andy's ask); falls back
         // to a top-level "Exports" menu if a platform's default menu has no Window submenu.
@@ -105,6 +109,11 @@ fn run_gui(context: tauri::Context) {
             // `Lolly run <tool>` render can never invoke it, so registering it
             // there would be dead surface.
             site_fetch::site_fetch,
+            // Loopback OAuth (plans/129 WP4): bind an ephemeral 127.0.0.1 port,
+            // then hand back the one redirect the system browser delivers. GUI
+            // only — sign-in is interactive by definition.
+            oauth::oauth_listen,
+            oauth::oauth_wait,
             // Nearby discovery (plans/110 section 3). GUI only for the same reason as
             // site_fetch: it is reachable from the collab ceremony / share sheets,
             // never from a headless render, so it stays out of cli.rs's handler.

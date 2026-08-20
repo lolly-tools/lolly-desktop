@@ -19,6 +19,11 @@
 //! and samples with temperature/top-p. Raw candidate strings go back to JS,
 //! where the engine's deterministic gate (`rewordCandidates`) decides what a
 //! person may ever see — sample before the gate, on every shell.
+//!
+//! Every sample is watermarked (`wm_add_green_bias` below): the green-list
+//! scheme of Kirchenbauer et al. (arXiv:2301.10226), mirroring the engine's
+//! text-watermark.ts constants so /verify's detector reads native and web
+//! generations identically.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -119,6 +124,39 @@ fn chat_prompt(system: &str, sentence: &str) -> String {
     format!(
         "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{sentence}<|im_end|>\n<|im_start|>assistant\n"
     )
+}
+
+// ── The green-list watermark (Kirchenbauer et al., arXiv:2301.10226) ─────────
+// Mirrors engine/src/text-watermark.ts's REWORD_WATERMARK exactly — same hash,
+// same key, same gamma/delta — so text generated HERE is verifiable by the
+// web shell's tokenizer-side detector. The pinned vectors in
+// tests/text-watermark.test.ts are re-asserted in this file's tests; change
+// either side only together with the other.
+
+const WM_KEY: u32 = 0x4c4f_4c4c; // 'LOLL'
+/// gamma 0.25 as a hash cut: 0.25 * 2^32.
+const WM_GAMMA_CUT: u32 = 0x4000_0000;
+const WM_DELTA: f32 = 6.0;
+
+/// 32-bit finalizer — the engine's `mix32`, bit for bit.
+fn wm_mix32(mut x: u32) -> u32 {
+    x ^= x >> 16;
+    x = x.wrapping_mul(0x21f0_aaad);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x735a_2d97);
+    x ^ (x >> 15)
+}
+
+/// Add the watermark bias to one next-token logits row, given the previous
+/// token id. Runs BEFORE temperature/top-p (`sample_top_p` divides by the
+/// temperature itself), matching the web worker's logits processor.
+fn wm_add_green_bias(logits: &mut [f32], prev: u32) {
+    let seed = wm_mix32(prev ^ WM_KEY);
+    for (i, l) in logits.iter_mut().enumerate() {
+        if wm_mix32(seed ^ (i as u32)) < WM_GAMMA_CUT {
+            *l += WM_DELTA;
+        }
+    }
 }
 
 /// Temperature + nucleus (top-p) sampling over one logits row. Pure; the rng is
@@ -270,12 +308,15 @@ fn generate(
         let mut past = DUMMY + prompt_ids.len();
         let mut logits = prefill.next_logits.clone();
         let mut ids: Vec<u32> = Vec::new();
+        let mut prev = prompt_ids.last().copied().unwrap_or(0) as u32;
         for _ in 0..max_new {
+            wm_add_green_bias(&mut logits, prev);
             let tok = sample_top_p(&logits, temperature, top_p, &mut rng);
             if tok == EOS_TOKEN_ID {
                 break;
             }
             ids.push(tok);
+            prev = tok;
             let next = step(&mut session, &eng, &[tok as i64], past, DUMMY, &kv)?;
             past += 1;
             kv = next.kv;
@@ -379,6 +420,28 @@ mod tests {
             let t = sample_top_p(&peaked, 1.0, 0.6, &mut rng);
             assert!(t == 0 || t == 1, "token {t} escaped the nucleus");
         }
+    }
+
+    #[test]
+    fn watermark_hash_matches_the_engine_pinned_vectors() {
+        // tests/text-watermark.test.ts pins the same values — the cross-language
+        // contract that keeps desktop rewords verifiable on the web detector.
+        assert_eq!(wm_mix32(0), 0);
+        assert_eq!(wm_mix32(1), 0x86d2_fa73);
+        assert_eq!(wm_mix32(0xdead_beef), 0x2a2a_caf2);
+        let green = |prev: u32, tok: u32| wm_mix32(wm_mix32(prev ^ WM_KEY) ^ tok) < WM_GAMMA_CUT;
+        assert!(green(1234, 4));
+        assert!(!green(1234, 5678));
+        assert!(!green(49151, 42));
+    }
+
+    #[test]
+    fn watermark_bias_moves_roughly_a_quarter_of_the_vocabulary() {
+        let mut logits = vec![0f32; 4096];
+        wm_add_green_bias(&mut logits, 77);
+        assert!(logits.iter().all(|&l| l == 0.0 || l == WM_DELTA));
+        let frac = logits.iter().filter(|&&l| l == WM_DELTA).count() as f32 / 4096.0;
+        assert!((frac - 0.25).abs() < 0.03, "green fraction {frac}");
     }
 
     #[test]
