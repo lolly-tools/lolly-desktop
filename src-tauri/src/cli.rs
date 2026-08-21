@@ -4,13 +4,13 @@
 //! The macOS `.app` ships a single Mach-O at `Lolly.app/Contents/MacOS/Lolly`.
 //! Run it with no arguments (or from Finder) and it opens the GUI, exactly as
 //! before. Run it with a tool to render and it does the render HEADLESSLY and
-//! exits — one binary, both a desktop app and a command line, which is the
+//! exits - one binary, both a desktop app and a command line, which is the
 //! Tauri-supported shape for this.
 //!
 //! There is no way to render a Lolly tool without a JavaScript runtime: the
 //! engine renders into a DOM, and the desktop app's render path IS the web
 //! shell running in a WebView. So "headless" here is not a second renderer in
-//! Rust — it is the same web shell, driven through URL mode (`#/tool/<id>?…&export=1`,
+//! Rust - it is the same web shell, driven through URL mode (`#/tool/<id>?…&export=1`,
 //! which the shell auto-exports on load, see shells/web/src/views/tool.ts) in an
 //! OFF-SCREEN window, with the finished bytes handed back to Rust to write to the
 //! path the user asked for. The full-featured headless renderer with every
@@ -34,7 +34,7 @@
 use std::io::Write;
 
 /// The window label. It is deliberately "main" so the existing capability set in
-/// `capabilities/default.json` (`"windows": ["main"]`) — fs scope, http, core —
+/// `capabilities/default.json` (`"windows": ["main"]`) - fs scope, http, core -
 /// applies to the headless window too. A different label would boot the web shell
 /// with no filesystem/network permission and every state/net call would throw.
 const WINDOW_LABEL: &str = "main";
@@ -53,7 +53,7 @@ fn watchdog_secs() -> u64 {
 /// A resolved CLI render job, shared with the invoke handlers via managed state.
 #[derive(Clone)]
 pub struct CliJob {
-    /// Bare tool id (e.g. "qr-code") — carried for the unknown-tool guard message.
+    /// Bare tool id (e.g. "qr-code") - carried for the unknown-tool guard message.
     pub tool_id: String,
     /// The URL-mode query, already encoded, without a leading `?`. Always carries
     /// `export=1` (the auto-export trigger) and, when given, `format=<fmt>`.
@@ -114,7 +114,7 @@ pub fn classify(args: &[String]) -> Mode {
     let mut params: Vec<(String, String)> = Vec::new();
     for pair in spec_query.split('&').filter(|p| !p.is_empty()) {
         let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-        set_param(&mut params, k, v.to_string()); // already encoded — kept verbatim
+        set_param(&mut params, k, v.to_string()); // already encoded - kept verbatim
     }
 
     let mut output: Option<String> = None;
@@ -124,7 +124,7 @@ pub fn classify(args: &[String]) -> Mode {
         let f = &flags[i];
         if !f.starts_with('-') {
             i += 1;
-            continue; // stray positional — ignore
+            continue; // stray positional - ignore
         }
         let body = f.trim_start_matches('-');
         let (key, inline) = match body.split_once('=') {
@@ -211,7 +211,7 @@ pub fn print_version() {
 
 pub fn print_help() {
     println!(
-        r#"Lolly — the desktop app, run as a command line.
+        r#"Lolly - the desktop app, run as a command line.
 
 Usage:
   Lolly                                 launch the desktop app (GUI)
@@ -235,8 +235,8 @@ Examples:
 Environment:
   LOLLY_CLI_TIMEOUT=<seconds>   render watchdog (default 90).
 
-This is the subset that ships inside the app. The full terminal experience —
-`list`, `describe`, `batch`, `preflight`, `validate`, every format tier — is the
+This is the subset that ships inside the app. The full terminal experience -
+`list`, `describe`, `batch`, `preflight`, `validate`, every format tier - is the
 Node CLI: run `npm run cli` in the repo, or install the `lolly` package."#
     );
 }
@@ -244,7 +244,7 @@ Node CLI: run `npm run cli` in the repo, or install the `lolly` package."#
 /// Run one headless render job, then exit. Never returns.
 pub fn run_cli(mut context: tauri::Context, job: CliJob) {
     // Clear the window declared in tauri.conf.json so nothing visible is ever
-    // created — we build our own off-screen window in `setup` instead.
+    // created - we build our own off-screen window in `setup` instead.
     context.config_mut().app.windows.clear();
 
     let init = build_init_script(&job);
@@ -285,7 +285,7 @@ pub fn run_cli(mut context: tauri::Context, job: CliJob) {
             // rAF, and the tool view's paint is rAF-driven; a visible window ordered
             // far off any display renders normally without ever showing. (The earlier
             // off-screen stall was the first-run instance sheet blocking boot, not
-            // occlusion — see instance-choice.ts.)
+            // occlusion - see instance-choice.ts.)
             tauri::WebviewWindowBuilder::new(app, WINDOW_LABEL, tauri::WebviewUrl::App("index.html".into()))
                 .title("Lolly")
                 .visible(true)
@@ -315,7 +315,7 @@ fn build_init_script(job: &CliJob) -> String {
     s.push_str("try{ if(!location.hash){ location.hash = ");
     s.push_str(&hash);
     s.push_str("; } }catch(e){}\n");
-    // Lazy internal invoke — __TAURI_INTERNALS__ may not exist the instant an early
+    // Lazy internal invoke - __TAURI_INTERNALS__ may not exist the instant an early
     // error fires; the try/catch just drops the diagnostic in that window.
     s.push_str("function __li(c,a){try{return window.__TAURI_INTERNALS__.invoke(c,a);}catch(e){return null;}}\n");
     s.push_str("(function(){var oe=console.error;console.error=function(){__li('cli_log',{level:'error',msg:Array.prototype.map.call(arguments,String).join(' ')});return oe.apply(console,arguments);};})();\n");
@@ -354,7 +354,7 @@ fn cli_write(job: tauri::State<'_, CliJob>, bytes: Vec<u8>, filename: Option<Str
     Ok(())
 }
 
-/// The render finished successfully — exit clean. `std::process::exit` (not
+/// The render finished successfully - exit clean. `std::process::exit` (not
 /// `AppHandle::exit`) guarantees the exit code and immediacy; the payload was
 /// already flushed by `cli_write`.
 #[tauri::command]
@@ -362,7 +362,7 @@ fn cli_done() {
     std::process::exit(0);
 }
 
-/// The render failed — print the reason to stderr and exit non-zero.
+/// The render failed - print the reason to stderr and exit non-zero.
 #[tauri::command]
 fn cli_fail(message: String) {
     eprintln!("lolly: {message}");

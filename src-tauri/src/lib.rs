@@ -53,10 +53,10 @@ fn run_gui(context: tauri::Context) {
         // optional live sign-in browser captures ride). Managed here so both the
         // capture commands and the sign-in/clear commands see the same instance.
         .manage(capture::CaptureSession::default())
-        // Loopback OAuth listeners (plans/129 WP4) — the system-browser sign-in
+        // Loopback OAuth listeners (plans/129 WP4) - the system-browser sign-in
         // return leg for personal send targets. GUI only, like site_fetch.
         .manage(oauth::OauthListeners::default())
-        // Add "Open Exports Folder" to the menu bar (exports land in ~/Downloads/Lolly —
+        // Add "Open Exports Folder" to the menu bar (exports land in ~/Downloads/Lolly -
         // bridge-overrides/export.ts). Placed in the Window menu (Andy's ask); falls back
         // to a top-level "Exports" menu if a platform's default menu has no Window submenu.
         .menu(|handle| {
@@ -89,13 +89,13 @@ fn run_gui(context: tauri::Context) {
             capture::capture_page,
             capture::capture_page_pdf,
             // Authenticated capture: open a visible sign-in window on the shared
-            // profile, report whether a session is live, and clear it. GUI only —
+            // profile, report whether a session is live, and clear it. GUI only -
             // interactive, like site_fetch/nearby; a headless render never signs in.
             capture::capture_signin_open,
             capture::capture_session_active,
             capture::capture_clear_session,
             matte::matte_infer,
-            // Native reword (plans/127): the SmolLM2 sampling loop on native ORT —
+            // Native reword (plans/127): the SmolLM2 sampling loop on native ORT -
             // probe/stage/generate; the JS side owns consent + the engine gate.
             // GUI only, like site_fetch: it is reachable only from the catalog's
             // humanize panel, never from a headless render.
@@ -111,7 +111,7 @@ fn run_gui(context: tauri::Context) {
             site_fetch::site_fetch,
             // Loopback OAuth (plans/129 WP4): bind an ephemeral 127.0.0.1 port,
             // then hand back the one redirect the system browser delivers. GUI
-            // only — sign-in is interactive by definition.
+            // only - sign-in is interactive by definition.
             oauth::oauth_listen,
             oauth::oauth_wait,
             // Nearby discovery (plans/110 section 3). GUI only for the same reason as
@@ -124,7 +124,7 @@ fn run_gui(context: tauri::Context) {
             nearby::nearby_exchange_invite,
             nearby::nearby_send_reply,
             nearby::nearby_decline,
-            // Native LAN socket transport (plans/110 section 4) — GUI only, same reason.
+            // Native LAN socket transport (plans/110 section 4) - GUI only, same reason.
             native_transport::native_connect,
             native_transport::native_send,
             native_transport::native_recv,
@@ -139,7 +139,7 @@ fn run_gui(context: tauri::Context) {
 
 /// Reveal the exports folder in the OS file manager. Exports save to
 /// `~/Downloads/Lolly` (bridge-overrides/export.ts `saveToDownloads`); create it if the
-/// user has not exported anything yet, then open it. Best-effort — a menu click never errors.
+/// user has not exported anything yet, then open it. Best-effort - a menu click never errors.
 fn open_exports_folder(app: &tauri::AppHandle) {
     let Ok(downloads) = app.path().download_dir() else {
         return;

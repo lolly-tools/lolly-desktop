@@ -1,9 +1,9 @@
-//! Nearby discovery — the desktop half of plans/110 section 3.
+//! Nearby discovery - the desktop half of plans/110 section 3.
 //!
 //! A PWA cannot see other devices on a network; a Tauri process can. This module
 //! advertises the running app over mDNS/DNS-SD (`_lolly._tcp.local.`) and browses
 //! for other Lolly devices, so the collab ceremony can hand an invite to a peer by
-//! TAPPING A NAME instead of scanning a QR. It is the transport of the invite only —
+//! TAPPING A NAME instead of scanning a QR. It is the transport of the invite only -
 //! the ceremony's matching plates still authenticate every pairing (plan 100 section 11.23),
 //! because mDNS is unauthenticated and anyone on a café network can advertise any
 //! name. "Discoverable" is never "trusted", and nothing here weakens the ceremony.
@@ -14,7 +14,7 @@
 //!     exactly `v`/`n` (chosen display name, ≤ NAME_CAP)/`k` (device kind). No email,
 //!     no profile identity, no stable id (plan 100 section 11.23).
 //!   • Invite exchange: a single length-prefixed JSON frame each way over a
-//!     short-lived TCP connection to the advertised port — `invite {token}` in,
+//!     short-lived TCP connection to the advertised port - `invite {token}` in,
 //!     `reply {token}` or `decline` back. The tokens are the SAME opaque blobs a QR
 //!     carries today; this module never inspects them. It is NOT a data transport
 //!     (that is the native socket transport of plans/110 section 4, a later wave) and it
@@ -29,7 +29,7 @@
 //!
 //! POLL-BASED BRIDGE
 //! The JS side (shells/web/src/lib/nearby-boot.ts) drives everything over `invoke`
-//! and reads state with `nearby_poll` — no Tauri events, so the JS↔Rust contract is
+//! and reads state with `nearby_poll` - no Tauri events, so the JS↔Rust contract is
 //! trivially testable with a fake invoke. This module keeps the peer set and the
 //! pending inbound invites in one `Mutex`; `nearby_poll` snapshots it.
 //!
@@ -49,7 +49,7 @@ use serde::Serialize;
 
 /// DNS-SD service type. The trailing dot + `local.` domain is the DNS-SD convention.
 const SERVICE_TYPE: &str = "_lolly._tcp.local.";
-/// Chosen display name ceiling — both what we advertise and what we accept.
+/// Chosen display name ceiling - both what we advertise and what we accept.
 const NAME_CAP: usize = 32;
 /// One control frame ceiling (matches the beam control-frame cap on the JS side).
 const MAX_FRAME_BYTES: usize = 128 * 1024;
@@ -59,13 +59,13 @@ const MAX_PEERS: usize = 128;
 /// How long a held inbound connection waits for the human to accept/decline before the
 /// handler drops it (the initiator then sees EOF and reports a timeout).
 const INVITE_DECISION_TIMEOUT: Duration = Duration::from_secs(180);
-/// Read timeout for a single frame — a peer that opens a socket and stalls must not
+/// Read timeout for a single frame - a peer that opens a socket and stalls must not
 /// pin a handler thread.
 const FRAME_READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// Connect timeout when we initiate an exchange to a discovered peer.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 /// How long a minted invite stays valid (plans/110 section 5, Andy 2026-08-13: invite expiry).
-/// The exchange is LIVE (the peer connected just now), so this is short — it bounds the
+/// The exchange is LIVE (the peer connected just now), so this is short - it bounds the
 /// window a captured invite frame could be replayed within.
 const INVITE_TTL_MS: u64 = 2 * 60_000;
 /// Clock-skew tolerance either side of the expiry check.
@@ -202,7 +202,7 @@ pub struct PollOut {
 // ── commands ─────────────────────────────────────────────────────────────────
 
 /// Start advertising this device under `name`. Regenerates a random instance name
-/// each call (rotation — no stable beacon), and starts the invite listener if it is
+/// each call (rotation - no stable beacon), and starts the invite listener if it is
 /// not already up. Idempotent enough: re-advertises with the new name.
 #[tauri::command]
 pub fn nearby_set_visible(name: String) -> Result<(), String> {
@@ -260,7 +260,7 @@ pub fn nearby_hide() -> Result<(), String> {
 }
 
 /// Start or stop browsing for peers. Browsing is independent of advertising (you can
-/// look without being seen — plan 110 section 3.1).
+/// look without being seen - plan 110 section 3.1).
 #[tauri::command]
 pub fn nearby_browse(on: bool) -> Result<(), String> {
     let mut st = state().lock().map_err(|_| "nearby state poisoned")?;
@@ -366,7 +366,7 @@ fn complete_invite(exchange_id: &str, resp: Response) -> Result<(), String> {
         let _ = pending.respond.send(resp);
         Ok(())
     } else {
-        // Already answered or timed out — treat as a no-op rather than an error.
+        // Already answered or timed out - treat as a no-op rather than an error.
         Ok(())
     }
 }
@@ -396,7 +396,7 @@ fn absorb_resolved(info: &ServiceInfo) {
         .filter(|c| *c == 'd' || *c == 'm')
         .unwrap_or('d');
     let Some(addr) = info.get_addresses().iter().copied().next() else {
-        return; // no address yet — a later event will carry one
+        return; // no address yet - a later event will carry one
     };
     let transport_port = info
         .get_property_val_str("t")
@@ -441,7 +441,7 @@ fn handle_invite_conn(mut stream: TcpStream) {
     let _ = stream.set_read_timeout(Some(FRAME_READ_TIMEOUT));
     let bytes = match read_frame(&mut stream) {
         Ok(b) => b,
-        Err(_) => return, // unreadable/oversized/stalled — drop it
+        Err(_) => return, // unreadable/oversized/stalled - drop it
     };
     let (token, exp, nonce) = match parse_message(&bytes) {
         Ok(Message::Invite { token, exp, nonce }) => (token, exp, nonce),
@@ -464,9 +464,9 @@ fn handle_invite_conn(mut stream: TcpStream) {
             return;
         }
         if !st.accept_nonce(&nonce) {
-            return; // a replayed invite frame — drop it silently
+            return; // a replayed invite frame - drop it silently
         }
-        // The peer's name is unknown here (the invite frame carries only the token —
+        // The peer's name is unknown here (the invite frame carries only the token -
         // identity is chosen on the peer's advert, which we don't correlate to this
         // socket). The ceremony's accept card shows the token's own name; "Someone" is
         // the honest placeholder until the pair is live.
@@ -490,7 +490,7 @@ fn handle_invite_conn(mut stream: TcpStream) {
         Ok(Response::Decline) => {
             let _ = write_frame(&mut stream, &encode_decline());
         }
-        Err(_) => { /* timed out — dropping the stream signals the initiator */ }
+        Err(_) => { /* timed out - dropping the stream signals the initiator */ }
     }
 }
 
@@ -669,7 +669,7 @@ fn clamp_name(name: &str) -> String {
 }
 
 /// A random instance label, rotated every window so it is not a tracking beacon. Not a
-/// security token — just an unpredictable-enough DNS-SD instance name — so it is mixed
+/// security token - just an unpredictable-enough DNS-SD instance name - so it is mixed
 /// from the wall clock + a monotonic counter rather than a crypto RNG.
 fn gen_instance_name() -> String {
     format!("lolly-{}", gen_token(10))
@@ -719,7 +719,7 @@ mod tests {
         // length 0
         let mut cur = Cursor::new(vec![0, 0, 0, 0]);
         assert!(read_frame(&mut cur).is_err());
-        // length just past the cap, with no body — must refuse on the length alone,
+        // length just past the cap, with no body - must refuse on the length alone,
         // before trying to read the body.
         let big = (MAX_FRAME_BYTES as u32 + 1).to_be_bytes();
         let mut cur = Cursor::new(big.to_vec());

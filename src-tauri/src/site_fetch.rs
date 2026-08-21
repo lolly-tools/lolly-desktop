@@ -1,16 +1,16 @@
-//! Native site fetch — transport 1 of the Design System studio's website source
+//! Native site fetch - transport 1 of the Design System studio's website source
 //! (plans/97 section 9 / SS9).
 //!
 //! The deployed PWA cannot fetch a third-party origin at all: `connect-src`
 //! allowlists six hosts, so a website ingest dies at CSP before CORS is even
 //! asked. The decision recorded in plan 97 section 9 is that no server-side fetch is
-//! ever built for it — so the feature exists ONLY where a real transport does,
+//! ever built for it - so the feature exists ONLY where a real transport does,
 //! and this is one of the two (the other is the Chrome extension). Nothing here
 //! is a fallback for the web shell; the web shell simply does not offer the
 //! source.
 //!
 //! WHAT THIS COMMAND DOES, AND DELIBERATELY DOES NOT DO
-//!   • GET one page — the FIRST-PARTY url the user typed and pressed a button
+//!   • GET one page - the FIRST-PARTY url the user typed and pressed a button
 //!     for. There is no crawl: no link following, no sitemap, no second page.
 //!   • Follow only SAME-PARTY redirects (see `same_party`), at most
 //!     MAX_REDIRECTS of them. A redirect that leaves the host, or downgrades
@@ -19,8 +19,8 @@
 //!   • Fetch the stylesheets the page links, and the icon/og-image hrefs, under
 //!     hard count/byte caps and one overall deadline.
 //!   • PARSE NOTHING. The raw HTML and the raw stylesheet text go back to the
-//!     client, where shells/web/src/lib/design-system/extract-site.ts — the pure,
-//!     transport-agnostic, fixture-tested parser both transports share — reads
+//!     client, where shells/web/src/lib/design-system/extract-site.ts - the pure,
+//!     transport-agnostic, fixture-tested parser both transports share - reads
 //!     them. The tag scan below exists only to know WHICH subresources to fetch;
 //!     it is not the parser and must never grow into one. Keeping one parser is
 //!     what stops the native and extension transports drifting apart.
@@ -49,7 +49,7 @@
 //! at a URL. If that ever needs tightening, `subresource_allowed` is the one
 //! function to change.
 //!
-//! TWIN FILE — KEEP IN SYNC
+//! TWIN FILE - KEEP IN SYNC
 //! shells/tauri-mobile/src-tauri/src/site_fetch.rs is a byte-identical copy. The
 //! two Tauri shells are separate submodule repos and neither may depend on the
 //! other, and unlike the TS side (shells/tauri-shared/bridge-overrides/, which
@@ -91,7 +91,7 @@ const USER_AGENT: &str = "Mozilla/5.0 (compatible; Lolly/1.0; +https://lolly.too
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SiteAsset {
-    /// Absolute address these bytes came from — the key the client matches
+    /// Absolute address these bytes came from - the key the client matches
     /// against the logo candidates extract-site.ts derives from the same HTML.
     pub url: String,
     /// Content-Type as the server sent it, minus parameters; "" when absent.
@@ -109,7 +109,7 @@ pub struct SiteFetchResult {
     /// Text of every stylesheet that fetched inside the caps, in document order.
     pub css_texts: Vec<String>,
     pub assets: Vec<SiteAsset>,
-    /// The address the HTML actually came from after redirects — what the client
+    /// The address the HTML actually came from after redirects - what the client
     /// passes to extract-site.ts as `baseUrl`, so relative URLs resolve right.
     pub final_url: String,
 }
@@ -187,13 +187,13 @@ fn is_http(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https") && url.host_str().is_some()
 }
 
-/// The user's address, validated. A bare "example.com" is not guessed at here —
+/// The user's address, validated. A bare "example.com" is not guessed at here -
 /// the field in the studio owns that, so what is fetched is what was shown.
 ///
 /// CREDENTIALS ARE REFUSED, NOT STRIPPED, and that check belongs here and not
 /// only in the studio's field. `Url::parse` accepts `https://user:pw@host`
 /// happily, `is_http` passes it, and reqwest turns the userinfo into an
-/// `Authorization: Basic` header — so without this the app would send somebody's
+/// `Authorization: Basic` header - so without this the app would send somebody's
 /// secret to a third party from their own machine, and the host would then sit
 /// in a provenance chip as if nothing had happened. Stripping instead would
 /// fetch a different (probably 401) page than the one described; refusing says
@@ -222,8 +222,8 @@ fn parse_entry_url(raw: &str) -> Result<Url, String> {
 /// folded away.
 ///
 /// The `www.` fold is a deliberate, narrow relaxation of strict same-host. Apex
-/// to `www` (and back) is the single most common redirect on the web —
-/// `https://suse.com` answers 301 to `https://www.suse.com` — and refusing it
+/// to `www` (and back) is the single most common redirect on the web -
+/// `https://suse.com` answers 301 to `https://www.suse.com` - and refusing it
 /// would fail the feature on a large share of real sites while protecting
 /// nothing: it is the same party, and the user typed one of the two. Every other
 /// host change is refused. Delete the strip_prefix to make this strict.
@@ -236,7 +236,7 @@ fn host_key(url: &Url) -> String {
 ///
 /// Same party (see `host_key`), never a downgrade out of https, and no jump to a
 /// different explicit port. An http→https upgrade of the same host is the one
-/// scheme change allowed — it is the hop that makes a typed `http://` address
+/// scheme change allowed - it is the hop that makes a typed `http://` address
 /// safe rather than less so.
 ///
 /// The upgrade is the reason the port test has two branches. `port_or_known_default`
@@ -245,7 +245,7 @@ fn host_key(url: &Url) -> String {
 /// allow. Waiving the test entirely (what this did before) is too broad the
 /// other way: it let `http://host:8080` → `https://host:9999` through, a hop
 /// that changes both the scheme and the service. So an upgrade compares what
-/// was WRITTEN — neither side may name an explicit port the other does not —
+/// was WRITTEN - neither side may name an explicit port the other does not -
 /// and everything else compares the effective port as before.
 fn same_party(from: &Url, to: &Url) -> bool {
     let scheme_ok = matches!(
@@ -386,8 +386,8 @@ fn host_of(url: &Url) -> &str {
 
 /// Bytes to text, lossily. Declared charsets other than UTF-8 are not honoured:
 /// a legacy-encoded page loses its non-ASCII characters (the site NAME may come
-/// back mangled) but every hex colour, family name and href — everything the
-/// census is built from — is ASCII and survives intact.
+/// back mangled) but every hex colour, family name and href - everything the
+/// census is built from - is ASCII and survives intact.
 fn decode_text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
@@ -404,7 +404,7 @@ struct Subresources {
 ///
 /// This is a scan, not a parse: it answers "what else should be fetched?" and
 /// nothing else. Ranking mirrors extract-site.ts's logo ranks so the ten assets
-/// prefetched are the ten that module will actually rank highest — apple-touch
+/// prefetched are the ten that module will actually rank highest - apple-touch
 /// icons and og:images first, then the icon links. The meta-key precedence
 /// (name, then property, then itemprop) is extract-site.ts order verbatim, so the
 /// two can never read the same odd tag differently.
@@ -503,7 +503,7 @@ impl Tag {
                 i += 1;
             }
             if i == start {
-                i += 1; // a stray '=' or '/' — step over it so this always advances
+                i += 1; // a stray '=' or '/' - step over it so this always advances
                 continue;
             }
             let key = self.attrs[start..i].to_ascii_lowercase();
@@ -580,7 +580,7 @@ fn tags(html: &str) -> Vec<Tag> {
             i += 1;
         }
         if i == name_start {
-            continue; // "</", "<!", "<?" — not an open tag
+            continue; // "</", "<!", "<?" - not an open tag
         }
         seen += 1;
         let name = html[name_start..i].to_ascii_lowercase();
@@ -627,7 +627,7 @@ fn tags(html: &str) -> Vec<Tag> {
 
 /// RFC 4648 base64, hand-written rather than pulled in as a crate: it is fifteen
 /// lines, it is the only encoding this file needs, and neither shell declares a
-/// base64 dependency today. (the desktop shell capture.rs never needed one either — CDP hands back
+/// base64 dependency today. (the desktop shell capture.rs never needed one either - CDP hands back
 /// base64 already encoded.)
 fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

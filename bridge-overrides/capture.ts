@@ -147,7 +147,7 @@ export function createCaptureAPI(): CaptureAPI {
       const handle = await openPdfFile(blob);
       const page = await handle.pageToSvg(0);
       if (!page.elementCount) {
-        throw new Error('Vector capture produced no drawable content — try a raster format.');
+        throw new Error('Vector capture produced no drawable content - try a raster format.');
       }
 
       // Window to the requested region. The printed PDF is the WHOLE page; scroll

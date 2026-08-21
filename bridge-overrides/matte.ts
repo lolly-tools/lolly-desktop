@@ -78,7 +78,7 @@ async function nativeModelCached(id: MatteModelId): Promise<boolean> {
   const file = MATTE_MODEL_FILES[id];
   try {
     if (await exists(`${MATTE_MODEL_APPDATA_DIR}/${file}`, { baseDir: BaseDirectory.AppData })) return true;
-  } catch { /* fs unavailable — fall through to the IDB check */ }
+  } catch { /* fs unavailable - fall through to the IDB check */ }
   return !!(await fetchModelBytes(file, true));
 }
 
@@ -93,14 +93,14 @@ async function ensureModelOnDisk(
   const rel = `${MATTE_MODEL_APPDATA_DIR}/${file}`;
   try {
     if (await exists(rel, { baseDir: BaseDirectory.AppData })) return true;
-  } catch { /* fs probe failed — try to (re)materialise below */ }
+  } catch { /* fs probe failed - try to (re)materialise below */ }
 
   const bytes = await fetchModelBytes(file, false, onDownload);
   if (!bytes) return false;
   if (signal?.aborted) throw abortError();
 
   try { await mkdir(MATTE_MODEL_APPDATA_DIR, { baseDir: BaseDirectory.AppData, recursive: true }); }
-  catch { /* already exists — mkdir is best-effort */ }
+  catch { /* already exists - mkdir is best-effort */ }
   await writeFile(rel, new Uint8Array(bytes), { baseDir: BaseDirectory.AppData });
   dbg('materialise', { file, bytes: bytes.byteLength });
   return true;

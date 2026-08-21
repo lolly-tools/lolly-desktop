@@ -98,7 +98,7 @@ function toast(message: string, isError?: boolean): void {
       (isError ? 'background:#7a1f1f;color:#fff' : 'background:#0c322c;color:#eafff4');
     document.body.appendChild(t);
     setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, 2800);
-  } catch { /* no DOM — nothing to show */ }
+  } catch { /* no DOM - nothing to show */ }
 }
 
 async function saveToDownloads(blob: Blob, filename: string | undefined, host: ExportHost): Promise<void> {

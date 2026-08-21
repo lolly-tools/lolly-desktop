@@ -21,7 +21,7 @@ serde_json = "1"
 # Protocol to screenshot arbitrary URLs. Requires Chrome/Chromium installed.
 # CDP returns screenshots already base64-encoded, so no separate base64 dep.
 headless_chrome = "1"
-# Native ONNX Runtime for host.matte's full BiRefNet — the model the wasm32
+# Native ONNX Runtime for host.matte's full BiRefNet - the model the wasm32
 # browser/CLI runner cannot load (~4 GB address ceiling → std::bad_alloc; see
 # src/matte.rs). `download-binaries` (a default feature) fetches a prebuilt
 # onnxruntime at build time and LINKS it (~+30 MB to the .app). That linked dylib
@@ -30,7 +30,7 @@ headless_chrome = "1"
 ort = "=2.0.0-rc.10"
 # Native reword generation (src/reword.rs, plans/127): SmolLM2 tokenizer loading
 # (reads the staged tokenizer.json verbatim) + temperature/top-p sampling. The
-# fancy-regex feature keeps the pretokenizer pure Rust (no oniguruma C dep) —
+# fancy-regex feature keeps the pretokenizer pure Rust (no oniguruma C dep) -
 # the same no-C rule that picked snow's default-resolver.
 tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
 rand = "0.8"
@@ -41,5 +41,5 @@ rand = "0.8"
 mdns-sd = "0.11"
 # Native LAN socket transport (src/native_transport.rs, plans/110 section 4): Noise
 # XX_25519_ChaChaPoly_BLAKE2s. The pure-Rust resolver (no `ring`/C dependency) keeps
-# cross-compilation to Linux/Windows/macOS — and later the Android NDK — unchanged.
+# cross-compilation to Linux/Windows/macOS - and later the Android NDK - unchanged.
 snow = { version = "0.9", default-features = false, features = ["default-resolver"] }

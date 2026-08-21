@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MPL-2.0
-//! Native background removal (host.matte) — runs the full BiRefNet that the
+//! Native background removal (host.matte) - runs the full BiRefNet that the
 //! browser/CLI cannot.
 //!
 //! ort-web is a single-thread wasm32 module: the full BiRefNet (Swin-L @1024²),
 //! with its upcast fp32 weights (~490 MB fp16 → ~980 MB) plus a Swin-L's
 //! activations, overruns the ~4 GB wasm32 ADDRESS space and `session.run()` aborts
-//! with std::bad_alloc — on effectively any device. Native ONNX Runtime has no such
+//! with std::bad_alloc - on effectively any device. Native ONNX Runtime has no such
 //! ceiling (onnxruntime-node ran this exact model clean in ~18 s CPU), so the
 //! desktop shell routes it here via the `ort` crate.
 //!
 //! One forward pass, session cached per model file. Transport is the Tauri v2 raw
 //! IPC: the JS side (bridge-overrides/matte.ts) sends the normalized NCHW input as
-//! a RAW request body (f32 little-endian — no JSON blow-up on the ~12 MB tensor)
+//! a RAW request body (f32 little-endian - no JSON blow-up on the ~12 MB tensor)
 //! with `x-model-file` + `x-edge` headers, and we return the single-channel mask as
 //! raw f32 bytes. The JS side has already materialised the model into app-data
 //! (models/matte/<file>), so we load from there and never download.
@@ -30,7 +30,7 @@ use ort::value::Tensor;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Manager};
 
-/// ORT sessions cached by absolute model path — a ~490 MB model loads once, then
+/// ORT sessions cached by absolute model path - a ~490 MB model loads once, then
 /// every later cut-out reuses it. The outer Mutex guards creation; the inner
 /// Mutex<Session> serialises a run (matte is one-at-a-time), so the heavy pass
 /// never holds the creation lock.
@@ -93,7 +93,7 @@ fn infer(model_path: PathBuf, edge: usize, input: Vec<f32>) -> Result<Vec<f32>, 
         .run(ort::inputs![input_name.as_str() => tensor])
         .map_err(|e| format!("ort run: {e}"))?;
 
-    // Single-channel logit/prob mask, edge*edge f32 — the JS side activates + composes.
+    // Single-channel logit/prob mask, edge*edge f32 - the JS side activates + composes.
     let (_shape, data) = outputs[output_name.as_str()]
         .try_extract_tensor::<f32>()
         .map_err(|e| format!("extract output: {e}"))?;

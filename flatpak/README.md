@@ -1,14 +1,14 @@
-# Lolly — Flatpak packaging
+# Lolly - Flatpak packaging
 
 Builds the Tauri desktop app as a Linux [Flatpak](https://flatpak.org/). **This cannot
-be built on macOS** — Flatpak is Linux-only and Tauri does not cross-compile. Use the
+be built on macOS** - Flatpak is Linux-only and Tauri does not cross-compile. Use the
 CI workflow (`.github/workflows/flatpak.yml`, runs on `v*` tags) or a Linux machine.
 
 ## How it works
 
 Rather than compile Lolly inside the offline flatpak-builder sandbox (which would need
-every cargo crate and npm package vendored as a source), we build a **`.deb` first** —
-where the network and the webkit2gtk toolchain are available — and the manifest just
+every cargo crate and npm package vendored as a source), we build a **`.deb` first** -
+where the network and the webkit2gtk toolchain are available - and the manifest just
 unpacks that prebuilt binary into `/app`.
 
 ```
@@ -24,7 +24,7 @@ tauri build --bundles deb  ──►  Lolly_x.y.z_amd64.deb  ──►  flatpak-
 | `tools.lolly.desktop.desktop` | desktop entry (exported to the host menu) |
 | `tools.lolly.desktop.metainfo.xml` | AppStream metadata (id must match the app id) |
 | `icon-{32,128,256}.png` | hicolor icons, copied from `../src-tauri/icons/` |
-| `lolly.deb` | **not committed** — the built package, staged here before building |
+| `lolly.deb` | **not committed** - the built package, staged here before building |
 
 The app id `tools.lolly.desktop`, the runtime (`org.gnome.Platform//47`, which provides
 the `webkit2gtk-4.1` Tauri needs), and the binary name (`lolly-desktop`, the Cargo
@@ -63,8 +63,8 @@ Because this can't be smoke-tested on macOS, watch these on the first CI/Linux r
 
 - **Runtime has webkit2gtk-4.1.** If the window is blank or the app won't start, the
   GNOME runtime version and the `WEBKIT_DISABLE_DMABUF_RENDERER=1` finish-arg are the
-  first knobs — try bumping the runtime (and the CI container tag) together.
+  first knobs - try bumping the runtime (and the CI container tag) together.
 - **`.deb` data member is gzip.** The manifest uses `tar -xzf data.tar.gz`. Tauri's
   bundler gzips it; if a future version switches to xz/zst, adjust the flag.
 - **AppStream compose passes.** If `appstreamcli compose` errors, the metainfo is the
-  cause — a missing screenshot is only a warning, but a bad id/launchable is fatal.
+  cause - a missing screenshot is only a warning, but a bad id/launchable is fatal.

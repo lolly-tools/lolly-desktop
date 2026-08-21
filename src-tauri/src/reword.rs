@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//! Native reword generation (plans/127) — runs SmolLM2-360M-Instruct on native
+//! Native reword generation (plans/127) - runs SmolLM2-360M-Instruct on native
 //! ONNX Runtime, the desktop answer to the browser's wasm floor (WebGPU is the
 //! web path; native CPU measures 0.4-1.4 s per sample on an M-series host where
 //! single-thread wasm took minutes).
@@ -18,7 +18,7 @@
 //!   <|im_end|>\n<|im_start|>assistant\n
 //! and samples with temperature/top-p. Raw candidate strings go back to JS,
 //! where the engine's deterministic gate (`rewordCandidates`) decides what a
-//! person may ever see — sample before the gate, on every shell.
+//! person may ever see - sample before the gate, on every shell.
 //!
 //! Every sample is watermarked (`wm_add_green_bias` below): the green-list
 //! scheme of Kirchenbauer et al. (arXiv:2301.10226), mirroring the engine's
@@ -36,7 +36,7 @@ use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Manager};
 use tokenizers::Tokenizer;
 
-/// The staged file set — the ONLY names `reword_put_file` accepts (a stray
+/// The staged file set - the ONLY names `reword_put_file` accepts (a stray
 /// header must not escape the model dir). Mirrors REWORD_MODEL_FILES in
 /// shells/web/src/lib/reword-models.ts.
 const MODEL_FILES: [&str; 6] = [
@@ -49,7 +49,7 @@ const MODEL_FILES: [&str; 6] = [
 ];
 
 const MODEL_DIR: &str = "models/reword/smollm2-360m-instruct";
-/// `<|im_end|>` — generation_config.json's eos_token_id, pinned at staging.
+/// `<|im_end|>` - generation_config.json's eos_token_id, pinned at staging.
 const EOS_TOKEN_ID: u32 = 2;
 
 struct Engine {
@@ -111,7 +111,7 @@ fn engine_for(root: &Path) -> Result<Arc<Engine>, String> {
         }
     }
     if layers == 0 {
-        return Err("model has no past_key_values inputs — not a merged decoder export".into());
+        return Err("model has no past_key_values inputs - not a merged decoder export".into());
     }
 
     let engine = Arc::new(Engine { session: Mutex::new(session), tokenizer, layers, kv_heads, head_dim });
@@ -119,7 +119,7 @@ fn engine_for(root: &Path) -> Result<Arc<Engine>, String> {
     Ok(engine)
 }
 
-/// SmolLM2's ChatML — see the module docs; the system prompt comes from JS.
+/// SmolLM2's ChatML - see the module docs; the system prompt comes from JS.
 fn chat_prompt(system: &str, sentence: &str) -> String {
     format!(
         "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{sentence}<|im_end|>\n<|im_start|>assistant\n"
@@ -127,8 +127,8 @@ fn chat_prompt(system: &str, sentence: &str) -> String {
 }
 
 // ── The green-list watermark (Kirchenbauer et al., arXiv:2301.10226) ─────────
-// Mirrors engine/src/text-watermark.ts's REWORD_WATERMARK exactly — same hash,
-// same key, same gamma/delta — so text generated HERE is verifiable by the
+// Mirrors engine/src/text-watermark.ts's REWORD_WATERMARK exactly - same hash,
+// same key, same gamma/delta - so text generated HERE is verifiable by the
 // web shell's tokenizer-side detector. The pinned vectors in
 // tests/text-watermark.test.ts are re-asserted in this file's tests; change
 // either side only together with the other.
@@ -138,7 +138,7 @@ const WM_KEY: u32 = 0x4c4f_4c4c; // 'LOLL'
 const WM_GAMMA_CUT: u32 = 0x4000_0000;
 const WM_DELTA: f32 = 6.0;
 
-/// 32-bit finalizer — the engine's `mix32`, bit for bit.
+/// 32-bit finalizer - the engine's `mix32`, bit for bit.
 fn wm_mix32(mut x: u32) -> u32 {
     x ^= x >> 16;
     x = x.wrapping_mul(0x21f0_aaad);
@@ -288,7 +288,7 @@ fn generate(
         .map_err(|e| format!("encode: {e}"))?;
     let prompt_ids: Vec<i64> = encoding.get_ids().iter().map(|&t| t as i64).collect();
 
-    // Prefill ONCE, then every sample continues from a clone of that state —
+    // Prefill ONCE, then every sample continues from a clone of that state -
     // the prompt is the expensive half of a short generation. The one-row
     // zeroed dummy past (masked out forever - see `step`) stands in for the
     // empty cache ort rc.10 cannot express.
@@ -340,7 +340,7 @@ pub fn reword_probe(app: AppHandle) -> Result<bool, String> {
 }
 
 /// Materialise ONE staged file (raw request body; `x-file` names it). The name
-/// must be in MODEL_FILES — never a path a header invented.
+/// must be in MODEL_FILES - never a path a header invented.
 #[tauri::command]
 pub async fn reword_put_file(app: AppHandle, request: Request<'_>) -> Result<Response, String> {
     let file = request
@@ -365,7 +365,7 @@ pub async fn reword_put_file(app: AppHandle, request: Request<'_>) -> Result<Res
 }
 
 /// Sample `count` raw rewrite candidates for one sentence. The engine gate on
-/// the JS side judges them — this returns the model's words verbatim.
+/// the JS side judges them - this returns the model's words verbatim.
 #[tauri::command]
 pub async fn reword_generate(
     app: AppHandle,
@@ -378,7 +378,7 @@ pub async fn reword_generate(
 ) -> Result<Vec<String>, String> {
     let root = model_root(&app)?;
     if !MODEL_FILES.iter().all(|f| root.join(f).exists()) {
-        return Err("reword model not on disk — stage it first".into());
+        return Err("reword model not on disk - stage it first".into());
     }
     let count = count.unwrap_or(3).clamp(1, 6);
     let max_new = max_new_tokens.unwrap_or(96).clamp(8, 256);
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn watermark_hash_matches_the_engine_pinned_vectors() {
-        // tests/text-watermark.test.ts pins the same values — the cross-language
+        // tests/text-watermark.test.ts pins the same values - the cross-language
         // contract that keeps desktop rewords verifiable on the web detector.
         assert_eq!(wm_mix32(0), 0);
         assert_eq!(wm_mix32(1), 0x86d2_fa73);
@@ -450,7 +450,7 @@ mod tests {
         assert!(!MODEL_FILES.contains(&"../../evil"));
     }
 
-    /// The full native loop against the REAL staged model. Ignored by default —
+    /// The full native loop against the REAL staged model. Ignored by default -
     /// run with the model dir on this machine:
     ///   LOLLY_REWORD_MODEL_DIR=…/shells/web/public/models/reword/smollm2-360m-instruct \
     ///     cargo test --lib reword -- --ignored

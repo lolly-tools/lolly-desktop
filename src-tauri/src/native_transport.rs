@@ -1,4 +1,4 @@
-//! Native LAN socket transport — the Noise-over-TCP collab transport (plans/110 section 4,
+//! Native LAN socket transport - the Noise-over-TCP collab transport (plans/110 section 4,
 //! `plans/110-work/n2-design.md`), for the case WebRTC is absent (Linux webkitgtk) or a
 //! power user forces LAN. This is the CORE (handshake, framing, address policy); the
 //! socket-lifecycle wiring into the collab provider is the device-verified integration
@@ -7,20 +7,20 @@
 //! SECURITY DECISIONS BAKED IN (Andy, 2026-08-13):
 //!   • The socket-open is **nearby-only + private-range**. `is_private_addr` is the
 //!     gate: the transport connects ONLY to an address discovered via mDNS (never an
-//!     attacker-authored token — the QR native-invite path was removed) AND only when
+//!     attacker-authored token - the QR native-invite path was removed) AND only when
 //!     that address is private/link-local/loopback. A discovered address outside those
 //!     ranges is refused, so a poisoned advert cannot point the socket at a public or
 //!     internal-service host.
 //!   • Invite **expiry + single-use nonce** live on the nearby invite exchange
-//!     (`nearby.rs`), not here — this module is reached only after that exchange.
+//!     (`nearby.rs`), not here - this module is reached only after that exchange.
 //!
 //! CRYPTO: Noise `XX_25519_ChaChaPoly_BLAKE2s` via `snow` (pure-Rust resolver, no C dep,
 //! so it cross-compiles to Linux/Windows/macOS and later the Android NDK unchanged).
-//!   • Per-connection ephemeral static keypair — never persisted; the pairing IS the
+//!   • Per-connection ephemeral static keypair - never persisted; the pairing IS the
 //!     trust event, exactly like the per-session DTLS cert on the WebRTC path.
 //!   • The SAS plate is derived on the JS side from the handshake hash `h`
 //!     (`derivePlateFromTranscript`, plate.ts) and `handshake_hash()` surfaces `h`.
-//!     IMPORTANT (review finding #1): a bare XX handshake hash is NOT a safe SAS input —
+//!     IMPORTANT (review finding #1): a bare XX handshake hash is NOT a safe SAS input -
 //!     the initiator picks its static key in the last message, so a MITM could grind it to
 //!     force a matching 6-char plate (~2^29 work). The STATIC-KEY COMMITMENT in
 //!     `run_initiator`/`run_responder` removes that freedom (the initiator is bound to its
@@ -29,7 +29,7 @@
 //!
 //! FRAME GRAMMAR (post-handshake): `u32 BE length || ciphertext`, where the ciphertext is
 //! the Noise transport message over `lane_byte || plaintext`. The lane is the FIRST byte
-//! of the ENCRYPTED payload — inside the AEAD, so a network attacker can neither read it
+//! of the ENCRYPTED payload - inside the AEAD, so a network attacker can neither read it
 //! nor flip a frame from one lane to another (stronger than a cleartext lane prefix, and
 //! what `snow`'s transport API supports without exposing associated data).
 
@@ -47,7 +47,7 @@ const MAX_FRAME_BYTES: usize = 80 * 1024;
 /// A handshake message is small; anything larger is hostile and a teardown.
 const MAX_HANDSHAKE_BYTES: usize = 4 * 1024;
 
-/// The three lanes the transport carries — the same set the RTC transport exposes
+/// The three lanes the transport carries - the same set the RTC transport exposes
 /// (`rtc-transport.ts` `LANES`). Byte value rides inside the encrypted payload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lane {
@@ -71,7 +71,7 @@ impl Lane {
 //    ever passed here); this is the private-range half of the decision ────────────────
 
 /// May the transport open a socket to this address? Private, link-local, loopback and
-/// IPv6 unique-local only. A discovered address outside these is refused — a poisoned
+/// IPv6 unique-local only. A discovered address outside these is refused - a poisoned
 /// mDNS advert cannot aim the connect at a public or internal-service host.
 pub fn is_private_addr(ip: IpAddr) -> bool {
     match ip {
@@ -110,7 +110,7 @@ pub fn build_responder() -> Result<HandshakeState, String> {
         .map_err(|e| format!("noise responder: {e}"))
 }
 
-/// The handshake hash `h` after the handshake completes — the SAS plate's input. Both
+/// The handshake hash `h` after the handshake completes - the SAS plate's input. Both
 /// peers compute the same value; a MITM's two legs diverge.
 pub fn handshake_hash(hs: &HandshakeState) -> Vec<u8> {
     hs.get_handshake_hash().to_vec()
@@ -193,7 +193,7 @@ use std::time::Duration;
 
 /// Connect timeout for the transport socket (matches the invite exchange).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
-/// X25519 static public key length — the size of the initiator's up-front commitment.
+/// X25519 static public key length - the size of the initiator's up-front commitment.
 const STATIC_KEY_LEN: usize = 32;
 /// Bound on a single handshake exchange, so a stalled peer cannot pin the connect.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -207,7 +207,7 @@ pub struct NativeSession {
 }
 
 impl NativeSession {
-    /// The handshake hash `h` — the SAS plate's input (both peers hold the same value).
+    /// The handshake hash `h` - the SAS plate's input (both peers hold the same value).
     pub fn handshake_hash(&self) -> &[u8] {
         &self.handshake_hash
     }
@@ -236,7 +236,7 @@ fn noise_params() -> Result<snow::params::NoiseParams, String> {
 /// session. The three XX messages are length-prefixed like everything else on the wire.
 ///
 /// STATIC-KEY COMMITMENT (review finding #1). Plain XX lets the initiator choose its static
-/// key in the LAST message, after seeing the responder's ephemeral — so a MITM could grind
+/// key in the LAST message, after seeing the responder's ephemeral - so a MITM could grind
 /// that static offline to force a matching 6-char SAS plate (~2^29 work, feasible in the
 /// handshake window). We remove that freedom: send our per-connection static PUBLIC key
 /// FIRST, before the handshake, and bind it into the transcript as the Noise prologue. We
@@ -273,7 +273,7 @@ fn run_initiator(mut stream: TcpStream) -> Result<NativeSession, String> {
 /// up-front static-key commitment (see `run_initiator`).
 fn run_responder(mut stream: TcpStream) -> Result<NativeSession, String> {
     stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| format!("{e}"))?;
-    // Read the initiator's committed static public key first, and bind it as the prologue —
+    // Read the initiator's committed static public key first, and bind it as the prologue -
     // a tampered commitment then yields a different transcript hash and the handshake fails.
     let committed = read_handshake_frame(&mut stream)?;
     if committed.len() != STATIC_KEY_LEN {
@@ -337,7 +337,7 @@ pub fn accept(stream: TcpStream) -> Result<NativeSession, String> {
 // A registered session runs a READER THREAD that blocks on the socket and drains decrypted
 // frames into an inbox the JS side polls (the nearby.rs pattern). The concurrency rules
 // that keep it deadlock-free:
-//   • the reader blocks on the SOCKET, never on the transport-state lock — it reads raw
+//   • the reader blocks on the SOCKET, never on the transport-state lock - it reads raw
 //     ciphertext first (no lock), then takes the lock only to decrypt (`read_raw_frame` +
 //     `decrypt_frame` are split for exactly this);
 //   • every op clones the Arcs it needs out from under the registry lock and RELEASES the
@@ -348,7 +348,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 /// Reliable-lane (ops+beam) inbox depth at which the reader STOPS reading the socket and
-/// waits — so TCP flow-control backpressures the sender rather than us silently dropping a
+/// waits - so TCP flow-control backpressures the sender rather than us silently dropping a
 /// reliable frame (review finding #3). Bounds memory too.
 const MAX_INBOX_RELIABLE: usize = 1024;
 /// Presence is lossy/unordered; past this the OLDEST presence frame is dropped (never a
@@ -364,7 +364,7 @@ const ADOPT_TIMEOUT_MS: u64 = 30_000;
 /// A blocked write cannot hang unbounded (paired with close's socket shutdown).
 const WRITE_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Two lanes' worth of pending inbound frames. Reliable (ops/beam) is never dropped —
+/// Two lanes' worth of pending inbound frames. Reliable (ops/beam) is never dropped -
 /// backpressured; lossy (presence) is drop-oldest.
 #[derive(Default)]
 struct Inbox {
@@ -527,7 +527,7 @@ pub fn session_recv(id: &str) -> Result<Vec<(Lane, Vec<u8>)>, String> {
     Ok(out)
 }
 
-/// The handshake hash `h` for a session — the plate input (`derivePlateFromTranscript`).
+/// The handshake hash `h` for a session - the plate input (`derivePlateFromTranscript`).
 pub fn session_plate(id: &str) -> Option<Vec<u8>> {
     registry().lock().ok()?.get(id).map(|e| e.handshake_hash.clone())
 }
@@ -544,7 +544,7 @@ fn teardown(entry: &SessionEntry) {
 pub fn session_close(id: &str) {
     // Remove under the registry lock, then act on the removed entry with the lock RELEASED,
     // so close never blocks on (or holds) a per-session lock while holding the registry lock
-    // — a single stalled peer can no longer wedge every session (#2).
+    // - a single stalled peer can no longer wedge every session (#2).
     let entry = match registry().lock() {
         Ok(mut reg) => reg.remove(id),
         Err(_) => return,
@@ -685,7 +685,7 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct NativeConnected {
     session_id: String,
-    /// The handshake hash `h`, hex — the JS side feeds it to derivePlateFromTranscript.
+    /// The handshake hash `h`, hex - the JS side feeds it to derivePlateFromTranscript.
     plate_hex: String,
 }
 
@@ -761,7 +761,7 @@ pub fn native_close(session_id: String) {
     session_close(&session_id);
 }
 
-/// Inbound sessions awaiting adoption — the responder JS polls this during a ceremony and
+/// Inbound sessions awaiting adoption - the responder JS polls this during a ceremony and
 /// adopts the one whose plate matches the pairing. Each element is {sessionId, plateHex}.
 #[tauri::command]
 pub fn native_poll_inbound() -> Vec<NativeConnected> {
@@ -842,7 +842,7 @@ mod tests {
     #[test]
     fn frame_length_is_bounded_before_allocation() {
         let (_ti, mut tr, _, _) = handshake_pair();
-        // A length just past the cap, no body — must refuse on the length alone.
+        // A length just past the cap, no body - must refuse on the length alone.
         let big = ((MAX_FRAME_BYTES as u32) + 1).to_be_bytes();
         let mut cur = Cursor::new(big.to_vec());
         assert!(read_frame(&mut cur, &mut tr).is_err());
@@ -1017,7 +1017,7 @@ mod tests {
     #[test]
     fn responder_rejects_a_static_commitment_mismatch() {
         // A MITM's grinding attack commits one static then authenticates with another (the
-        // one it ground to hit a target plate). The responder must reject that — this is the
+        // one it ground to hit a target plate). The responder must reject that - this is the
         // check that closes finding #1.
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -1052,7 +1052,7 @@ mod tests {
     #[test]
     fn connect_refuses_a_non_private_address() {
         // Never opens a socket to a public address, whatever the port. (No connection is
-        // attempted — the guard is before connect — so this does not touch the network.)
+        // attempted - the guard is before connect - so this does not touch the network.)
         match connect("8.8.8.8".parse().unwrap(), 9) {
             Err(e) => assert!(e.contains("non-private"), "wrong refusal reason: {e}"),
             Ok(_) => panic!("a public address must be refused before any connect"),

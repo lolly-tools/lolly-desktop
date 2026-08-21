@@ -7,7 +7,7 @@
 # this manifest just unpacks that prebuilt binary into /app. See ./README.md and
 # ../../../.github/workflows/flatpak.yml.
 #
-# The .deb must be staged next to this file as `lolly.deb` before building — CI does
+# The .deb must be staged next to this file as `lolly.deb` before building - CI does
 # that from the build-deb job's artifact; locally, copy it there yourself.
 #
 # app-id == the Tauri `identifier` in ../src-tauri/tauri.conf.json, so the Flatpak,
@@ -35,7 +35,7 @@ finish-args:
   # tool's local headless-Chrome DevTools connection.
   - --share=network
   # Let users save exports to their Downloads/Documents (state lives in the app's
-  # per-app dir, which Flatpak grants automatically — no extra permission needed).
+  # per-app dir, which Flatpak grants automatically - no extra permission needed).
   - --filesystem=xdg-download
   - --filesystem=xdg-documents
   # Common Tauri-on-Flatpak fix: the DMABUF renderer shows a blank window on some

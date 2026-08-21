@@ -1,25 +1,25 @@
-//! Page capture — the engine `capture` capability fulfilled natively.
+//! Page capture - the engine `capture` capability fulfilled natively.
 //!
 //! The web shell can't screenshot a cross-origin URL (a browser page can't read
 //! pixels it doesn't own). The desktop shell can, because it drives a headless
-//! Chrome over the DevTools Protocol — capturing with full authority, outside any
+//! Chrome over the DevTools Protocol - capturing with full authority, outside any
 //! page sandbox. We deliberately use headless Chrome rather than the app's own
 //! WKWebView/WebView2: Tauri v2 has no stable API to screenshot arbitrary content
 //! with viewport/scroll control.
 //!
 //! Two commands, one navigation path:
-//!   • capture_page      — raster. Page.captureScreenshot with a DOCUMENT-space
+//!   • capture_page      - raster. Page.captureScreenshot with a DOCUMENT-space
 //!                         clip: scroll depth + crop insets + an optional range
 //!                         extension (the tall strip a scroll video pans over)
 //!                         all resolve into one clip rect.
-//!   • capture_page_pdf  — vector. Page.printToPDF under `screen` media
+//!   • capture_page_pdf  - vector. Page.printToPDF under `screen` media
 //!                         emulation: a TRUE vector print of the page (text,
 //!                         boxes, paths) sized to the viewport width and the
 //!                         full page height. The JS bridge converts PDF → SVG
 //!                         (the engine's pdf-map/pdf-svg path) and windows it.
 //!
 //! Clip semantics (probed, Chromium ≥ 120): with captureBeyondViewport: true the
-//! clip rect is relative to the DOCUMENT, not the scrolled viewport — so scroll
+//! clip rect is relative to the DOCUMENT, not the scrolled viewport - so scroll
 //! depth must land in clip.y, not in window.scrollTo (an earlier version scrolled
 //! and clipped at y=0, which silently framed the page top at every depth). We
 //! still scroll to the target first, but only so lazy-loaded content near the
@@ -29,7 +29,7 @@
 //! the JS override wraps them in AssetRefs.
 //!
 //! Note on SSRF: this is a tool the user runs locally, so capturing localhost / a
-//! private dev server is a *feature*, not a risk — we only reject non-http(s)
+//! private dev server is a *feature*, not a risk - we only reject non-http(s)
 //! schemes (no file://, chrome://). The SSRF hardening belongs to the deferred
 //! server-side render service, where an attacker could choose the URL.
 
@@ -43,7 +43,7 @@ use headless_chrome::{Browser, LaunchOptions, Tab};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-/// Ceiling on any captured strip, in CSS px — stays comfortably under Chrome's
+/// Ceiling on any captured strip, in CSS px - stays comfortably under Chrome's
 /// 16384-px texture limit at dpr 1 and bounds the base64 IPC payload. The range
 /// extension shrinks first; the framed viewport itself is never truncated.
 const MAX_CLIP_H: f64 = 12000.0;
@@ -51,7 +51,7 @@ const MAX_CLIP_H: f64 = 12000.0;
 /// Ceiling on the printed page height, in CSS px. The hard PDF limit is 14400
 /// *points* per side; paper_height is CSS-px/96 inches ⇒ px·0.75 points, so
 /// 19200 px = 14400 pt is the true maximum single page. Real pages never reach
-/// it; beyond it we clamp (and content past the cap is unavailable — signalled
+/// it; beyond it we clamp (and content past the cap is unavailable - signalled
 /// by page_height being the clamped value the bridge windows against).
 const MAX_PDF_H: f64 = 19200.0;
 
@@ -74,11 +74,11 @@ pub struct CaptureSpec {
     /// 0..1 fraction of the scrollable height, or a px offset when > 1.
     pub scroll_depth: Option<f64>,
     /// Extend the capture down to this scroll position (same semantics as
-    /// scroll_depth) — the strip a scroll video pans over. ≤ scroll_depth ⇒ none.
+    /// scroll_depth) - the strip a scroll video pans over. ≤ scroll_depth ⇒ none.
     pub range_to: Option<f64>,
     /// Settle time after load (and after scrolling) before the shot.
     pub wait_ms: Option<u64>,
-    /// Device pixel ratio — renders the clip at this scale for a crisp raster.
+    /// Device pixel ratio - renders the clip at this scale for a crisp raster.
     pub dpr: Option<f64>,
     /// Custom CSS injected before the shot (userstyles-style, additive).
     pub css: Option<String>,
@@ -93,7 +93,7 @@ pub struct CaptureSpec {
 pub struct CaptureResult {
     /// Base64 PNG, as CDP returned it.
     pub data: String,
-    /// Captured box in CSS px — crop applied, range extension included.
+    /// Captured box in CSS px - crop applied, range extension included.
     pub width: u32,
     pub height: u32,
     /// The cropped viewport height alone (the pan window; height − frameHeight
@@ -124,11 +124,11 @@ pub struct VectorResult {
 /// screenshots. Tauri-managed state; `None` until the user opens a sign-in window,
 /// `None` again after Clear.
 ///
-/// One live Chrome, reused — captures open a BACKGROUND tab in it (same live cookie
+/// One live Chrome, reused - captures open a BACKGROUND tab in it (same live cookie
 /// jar; no profile-lock, and none of the kill/flush race that closing a separate
 /// browser between sign-in and capture would incur). When no window is live, a capture
 /// falls back to a fresh headless browser: on the persistent profile IFF the user has
-/// signed in at least once (the `signin_marker`), so an earlier session still applies —
+/// signed in at least once (the `signin_marker`), so an earlier session still applies -
 /// otherwise on a throwaway temp profile, exactly as before this feature (stateless, so
 /// an ordinary public-page shot never accretes cookies in the shared profile).
 ///
@@ -148,7 +148,7 @@ impl CaptureSession {
 }
 
 /// Where the persistent Chrome profile lives (under the app data dir, so it survives
-/// restarts). Does NOT create it — the status check must not materialise an empty dir.
+/// restarts). Does NOT create it - the status check must not materialise an empty dir.
 fn capture_profile_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
@@ -157,7 +157,7 @@ fn capture_profile_path(app: &AppHandle) -> Result<PathBuf, String> {
         .join("capture-profile"))
 }
 
-/// The persistent profile, created if absent — cookies/session a sign-in window writes
+/// The persistent profile, created if absent - cookies/session a sign-in window writes
 /// here are reused by later shots.
 fn capture_profile_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = capture_profile_path(app)?;
@@ -166,7 +166,7 @@ fn capture_profile_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// A marker written the first time the user opens a sign-in window. Its presence is the
-/// authoritative "there are saved sign-ins" signal — separate from the in-memory
+/// authoritative "there are saved sign-ins" signal - separate from the in-memory
 /// `active` flag (which only tracks a LIVE window) so the status chip and Clear button
 /// stay truthful after the window is closed or the app restarts. Removed with the
 /// profile by Clear.
@@ -186,8 +186,8 @@ fn has_saved_signin(app: &AppHandle) -> bool {
 /// blocks for the whole beforeExport budget). We only ever launch a fresh browser on the
 /// profile from the headless fallback (the live sign-in window is ridden via new_tab
 /// instead), so testing the lock there lets that case fail FAST with a clear message
-/// rather than hang. A stale/absent lock — which Chrome cleans up itself on the next
-/// real launch — reads as free.
+/// rather than hang. A stale/absent lock - which Chrome cleans up itself on the next
+/// real launch - reads as free.
 fn profile_locked(profile: &Path) -> bool {
     let Ok(target) = std::fs::read_link(profile.join("SingletonLock")) else {
         return false; // no lock → free
@@ -278,16 +278,16 @@ pub async fn capture_signin_open(
     .map_err(|e| format!("sign-in task panicked: {e}"))?
 }
 
-/// Whether the user has a saved session captures will ride — a LIVE sign-in window OR a
+/// Whether the user has a saved session captures will ride - a LIVE sign-in window OR a
 /// persisted profile from an earlier sign-in (the marker on disk). Drives the tool's
 /// "Signed-in session active" chip and whether Clear is offered. The atomic read is
-/// lock-free; the marker check is a single stat — neither blocks behind a capture.
+/// lock-free; the marker check is a single stat - neither blocks behind a capture.
 #[tauri::command]
 pub fn capture_session_active(app: AppHandle, session: State<'_, CaptureSession>) -> bool {
     session.active.load(Ordering::Relaxed) || has_saved_signin(&app)
 }
 
-/// Close the live session browser and DELETE the persistent profile — a full sign-out
+/// Close the live session browser and DELETE the persistent profile - a full sign-out
 /// wiping every stored cookie/site datum. GUI-only.
 #[tauri::command]
 pub async fn capture_clear_session(
@@ -313,7 +313,7 @@ pub async fn capture_clear_session(
     .map_err(|e| format!("clear task panicked: {e}"))?
 }
 
-/// A VISIBLE Chrome on the persistent profile — the sign-in window.
+/// A VISIBLE Chrome on the persistent profile - the sign-in window.
 fn launch_signin_browser(profile: &Path, w: u32, h: u32) -> Result<Browser, String> {
     let launch = LaunchOptions::default_builder()
         .headless(false)
@@ -324,7 +324,7 @@ fn launch_signin_browser(profile: &Path, w: u32, h: u32) -> Result<Browser, Stri
     Browser::new(launch).map_err(|e| format!("open sign-in browser: {e}"))
 }
 
-/// Run `f` against a tab navigated + styled per `spec` — in the LIVE session browser
+/// Run `f` against a tab navigated + styled per `spec` - in the LIVE session browser
 /// (a background tab, riding the authenticated session) when one is up, else a fresh
 /// headless browser on the persistent profile. Serialised on the session lock for its
 /// whole duration (one capture at a time), which also keeps the shared cookie jar
@@ -339,7 +339,7 @@ fn with_capture_tab<T>(
 ) -> Result<T, String> {
     valid_http_url(&spec.url)?;
     let mut guard = session.lock();
-    // 1. A LIVE sign-in window? Ride it — a background tab shares its live cookie jar.
+    // 1. A LIVE sign-in window? Ride it - a background tab shares its live cookie jar.
     if guard.is_some() {
         match guard.as_ref().unwrap().new_tab() {
             Ok(tab) => {
@@ -367,13 +367,13 @@ fn with_capture_tab<T>(
         }
     }
     // 2. No live window. If the user has SAVED sign-ins, capture headless on the shared
-    //    persistent profile — keeping the lock held so no second Chrome opens the same
+    //    persistent profile - keeping the lock held so no second Chrome opens the same
     //    `--user-data-dir` at once (Chrome refuses a locked profile). If they have not
     //    signed in, keep the pre-feature behaviour EXACTLY: a throwaway temp profile per
-    //    launch (stateless, and safe to run concurrently — so release the lock first).
+    //    launch (stateless, and safe to run concurrently - so release the lock first).
     if signin_marker(profile).exists() {
         // Fail fast on a locked profile (an orphaned capture, or the sign-in window
-        // still open in another process) — launching a second Chrome on it would hang.
+        // still open in another process) - launching a second Chrome on it would hang.
         if profile_locked(profile) {
             return Err(
                 "The saved sign-in is in use by an open browser window. Close the \
@@ -394,7 +394,7 @@ fn with_capture_tab<T>(
 ///
 /// `device_scale_factor` is fixed at 1 to MATCH the fresh-headless path (which never
 /// sets a DSF): the export dpr is applied downstream by the screenshot `clip.scale`
-/// (raster) — NOT by the layout DSF. Setting DSF = dpr here would both double-scale the
+/// (raster) - NOT by the layout DSF. Setting DSF = dpr here would both double-scale the
 /// PNG and make the page render at a different `devicePixelRatio` (different
 /// srcset/media-query branches) than a headless shot of the same spec.
 fn set_viewport(tab: &Tab, width: u32, height: u32) {
@@ -528,7 +528,7 @@ fn run_raster(tab: &Tab, spec: &CaptureSpec) -> Result<CaptureResult, String> {
         .map(|t| (resolve_scroll(t, ph, vh) - from).max(0.0))
         .unwrap_or(0.0);
 
-    // Scroll to the framed region — NOT for framing (the clip below is document-
+    // Scroll to the framed region - NOT for framing (the clip below is document-
     // space), but so lazy-loaded content near it hydrates before the settle.
     if from > 0.0 {
         let _ = tab.evaluate(&format!("window.scrollTo(0, {from});"), false);
@@ -542,7 +542,7 @@ fn run_raster(tab: &Tab, spec: &CaptureSpec) -> Result<CaptureResult, String> {
     let frame_w = (vw * (1.0 - l - r)).max(1.0);
     let frame_h = (vh * (1.0 - t - b)).max(1.0);
     // Chrome rejects clips past the page edge; also bound the strip (texture +
-    // IPC ceilings — at high dpr the texture limit is the binding one).
+    // IPC ceilings - at high dpr the texture limit is the binding one).
     let max_h = MAX_CLIP_H.min(16000.0 / scale);
     let x = vw * l;
     let y = (from + vh * t).min((ph - frame_h).max(0.0));
@@ -591,7 +591,7 @@ fn run_pdf(tab: &Tab, spec: &CaptureSpec) -> Result<VectorResult, String> {
     let vw = spec.width.max(1) as f64;
     let vh = spec.height.unwrap_or((spec.width * 9 / 16).max(1)).max(1);
 
-    // Print with SCREEN styles — without this, @media print rules (and Chrome's
+    // Print with SCREEN styles - without this, @media print rules (and Chrome's
     // print defaults) restyle the page and the "screenshot" stops looking like
     // the site. Set after load: printToPDF re-lays-out against the emulation.
     let _ = tab.call_method(Emulation::SetEmulatedMedia {
@@ -602,7 +602,7 @@ fn run_pdf(tab: &Tab, spec: &CaptureSpec) -> Result<VectorResult, String> {
     // Lazy-load hydration for the whole document: walk the page once, then
     // return to the top so position:fixed chrome prints in its resting place.
     // This walk GROWS pages whose below-the-fold images are loading="lazy" with
-    // no reserved size, so we measure AFTER it — measuring before would size the
+    // no reserved size, so we measure AFTER it - measuring before would size the
     // paper to the pre-hydration height and printToPDF would drop the grown tail.
     let _ = tab.evaluate("window.scrollTo(0, document.body ? document.body.scrollHeight : 0);", false);
     std::thread::sleep(Duration::from_millis(150));
