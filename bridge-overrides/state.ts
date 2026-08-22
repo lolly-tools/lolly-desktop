@@ -23,6 +23,8 @@ import {
   mkdir,
   readTextFile,
   writeTextFile,
+  readFile,
+  writeFile,
   readDir,
   remove,
 } from '@tauri-apps/plugin-fs';
@@ -45,3 +47,27 @@ const appDataFs: StateFs = {
 export function createStateAPI(_db: StateDb): WebStateAPI {
   return createFsStateAPI(appDataFs);
 }
+
+// ── Instance-pack store backend (plans/132 wave 3) ────────────────────────────
+// The pack store rides the SAME app-data filesystem as the state above: iOS
+// purges WKWebView site data under storage pressure, so a loaded brand pack
+// must not live only in IndexedDB (a purged device silently lost the brand
+// until the .lolly was re-opened). Installed at module init - this override is
+// on the bridge boot path, ahead of initInstanceBase()'s initPackStore(),
+// which also migrates any legacy IndexedDB copy across once.
+import { setPackStoreBackend } from '../../web/src/lib/pack-store.ts';
+import { createFsPackDb, type PackFs } from '../../tauri-shared/bridge-overrides/pack-store-fs.ts';
+
+const packFs: PackFs = {
+  exists: (path) => exists(path, { baseDir: BaseDirectory.AppData }),
+  mkdirRecursive: (path) => mkdir(path, { baseDir: BaseDirectory.AppData, recursive: true }),
+  readFile: (path) => readFile(path, { baseDir: BaseDirectory.AppData }),
+  writeFile: (path, bytes) => writeFile(path, bytes, { baseDir: BaseDirectory.AppData }),
+  readTextFile: (path) => readTextFile(path, { baseDir: BaseDirectory.AppData }),
+  writeTextFile: (path, text) => writeTextFile(path, text, { baseDir: BaseDirectory.AppData }),
+  readDirNames: async (path) =>
+    (await readDir(path, { baseDir: BaseDirectory.AppData })).map((entry) => entry.name),
+  removeFile: (path) => remove(path, { baseDir: BaseDirectory.AppData }),
+  removeDirRecursive: (path) => remove(path, { baseDir: BaseDirectory.AppData, recursive: true }),
+};
+setPackStoreBackend(createFsPackDb(packFs));
