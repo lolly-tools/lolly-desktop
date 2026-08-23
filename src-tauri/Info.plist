@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged into the bundle plist by Tauri. The binary bundles standard-algorithm
+	     crypto beyond the OS's (rustls/ring, snow Noise transport, engine zip AES +
+	     ZipCrypto), so the app USES non-exempt encryption - mass market, self-classified
+	     ECCN 5D992.c. See appstore/encryption-compliance.html in the repo root. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<true/>
+	<!-- The in-app locale catalogs (shells/web/src/locales) - declares the language
+	     list to the Mac App Store so the listing shows every supported language. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+		<string>bg</string>
+		<string>bn</string>
+		<string>cs</string>
+		<string>de</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>hi</string>
+		<string>id</string>
+		<string>it</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>ms</string>
+		<string>nl</string>
+		<string>no</string>
+		<string>pl</string>
+		<string>pt</string>
+		<string>ro</string>
+		<string>sv</string>
+		<string>tl</string>
+		<string>tr</string>
+		<string>uk</string>
+		<string>ur</string>
+		<string>vi</string>
+		<string>zh-Hans</string>
+		<string>zh-Hant</string>
+	</array>
+</dict>
+</plist>

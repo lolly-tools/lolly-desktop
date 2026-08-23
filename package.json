@@ -8,10 +8,10 @@
     "dev": "tauri dev",
     "dev:frontend": "VITE_MODELS_BASE=https://lolly.tools vite",
     "build": "npm run build:frontend && tauri build",
-    "build:frontend": "VITE_MODELS_BASE=https://lolly.tools vite build",
-    "build:community": "LOLLY_EMBED_CATALOG=neutral npm run build",
-    "build:frontend:community": "LOLLY_EMBED_CATALOG=neutral npm run build:frontend",
-    "tauri": "tauri"
+    "build:frontend": "VITE_MODELS_BASE=https://lolly.tools vite build && node -e \"const fs=require('node:fs');for(const f of fs.readdirSync('../web/src/locales'))if(f.endsWith('.json'))fs.rmSync('dist/info/'+f.slice(0,-5),{recursive:true,force:true})\"",
+    "tauri": "tauri",
+    "build:profile": "LOLLY_EMBED_CATALOG=profile npm run build",
+    "build:frontend:profile": "LOLLY_EMBED_CATALOG=profile npm run build:frontend"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

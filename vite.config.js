@@ -32,10 +32,12 @@ function jsToTsFallback() {
 
 // Embedded content mode (plans/131 WP-A) - the machinery lives in
 // ../tauri-shared/vite-embed.mjs, SHARED with the mobile shell so the two
-// configs cannot drift. The desktop's default stays 'profile' (the active
-// repo-root views); `npm run build:community` flips it to 'neutral' for the
-// app-store build.
-const EMBED_CATALOG = resolveEmbedMode(process.env.LOLLY_EMBED_CATALOG, 'profile');
+// configs cannot drift. Default 'neutral' (start brand), matching mobile
+// (2026-08-23): every shipped app is the neutral build, and SUSE folks load
+// the SUSE brand from a .lolly pack until the internal hosted instance
+// exists. `npm run build:profile` flips it back to embedding the active
+// repo-root profile views for an internal build.
+const EMBED_CATALOG = resolveEmbedMode(process.env.LOLLY_EMBED_CATALOG, 'neutral');
 
 
 // Swap specific web-shell bridge modules for Tauri-native implementations.
