@@ -88,9 +88,11 @@ export default defineConfig({
       'capture': resolve(__dirname, 'bridge-overrides/capture.ts'),
       'capabilities-provided': resolve(__dirname, 'bridge-overrides/capabilities-provided.ts'),
       'export': resolve(__dirname, 'bridge-overrides/export.ts'),
-      // Native background removal: routes the wasm-impossible full BiRefNet to a
-      // Rust ORT command; other models delegate to the shared wasm runner.
-      'matte': resolve(__dirname, 'bridge-overrides/matte.ts'),
+      // There is deliberately no 'matte' override. It existed for ONE model, the
+      // full BiRefNet, which needed native ORT because it overran the wasm32
+      // address space; both BiRefNet models are gone from the catalogue and every
+      // remaining matte model fits the wasm heap, so the desktop shell runs the
+      // SAME shared wasm runner as web and CLI.
       // Native website read for the Design System studio's Website source
       // (plans/97 section 9): a Rust `site_fetch` command, no CSP and no CORS in the
       // way. The web module this replaces is the one WITHOUT a transport - a

@@ -1,6 +1,5 @@
 mod capture;
 mod cli;
-mod matte;
 mod menu;
 mod native_transport;
 mod nearby;
@@ -70,7 +69,6 @@ fn run_gui(context: tauri::Context) {
             capture::capture_signin_open,
             capture::capture_session_active,
             capture::capture_clear_session,
-            matte::matte_infer,
             // Native reword (plans/127): the SmolLM2 sampling loop on native ORT -
             // probe/stage/generate; the JS side owns consent + the engine gate.
             // GUI only, like site_fetch: it is reachable only from the catalog's

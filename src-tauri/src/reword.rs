@@ -4,8 +4,8 @@
 //! web path; native CPU measures 0.4-1.4 s per sample on an M-series host where
 //! single-thread wasm took minutes).
 //!
-//! Same shape as matte.rs: the JS side (lib/reworder.ts's Tauri probe) owns
-//! consent + download and materialises the staged model set into
+//! The JS side (lib/reworder.ts's Tauri probe) owns consent + download and
+//! materialises the staged model set into
 //! app-data/models/reword/smollm2-360m-instruct/ (via `reword_put_file`); this
 //! side loads from there and never downloads. The session and tokenizer are
 //! cached per model dir, one generation at a time per engine.
