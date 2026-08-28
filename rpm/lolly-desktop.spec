@@ -142,6 +142,26 @@ export CARGO_HOME="$(pwd)/.cargo-home"
 # tauri-build reads ../dist (frontendDist in tauri.conf.json) and embeds it via
 # generate_context!(). It is already in the tarball, prebuilt - see the header.
 cd src-tauri
+# MEMORY. The final rustc invocation links lolly-desktop with the ENTIRE frontend
+# embedded by generate_context!() (~175 MB of assets) plus a statically linked ONNX
+# Runtime, in one process with a large peak RSS. %limit_build is openSUSE's idiom for
+# bounding that: it caps parallel jobs by available memory, so a constrained OBS worker
+# throttles instead of dying. Precautionary - a build worker with little RAM per core is
+# the case it protects.
+#
+# It is NOT what fixed the OOM seen while developing this spec. That was rustc getting
+# SIGKILLed with no diagnostic, and the cause was the build tree sitting on a tmpfs
+# /tmp - so several GB of "disk" were actually resident memory. Build on real disk;
+# the same mistake also reports itself as "Disk quota exceeded (os error 122)" once
+# tmpfs hits its ceiling. Neither message mentions tmpfs.
+# Guarded on the MACRO, not the distro. %limit_build ships with the OBS build macros,
+# not base rpm-build, so it is undefined even on Tumbleweed in a plain rpmbuild - and an
+# undefined macro is emitted verbatim into the shell script, where `%limit_build -m 3000`
+# becomes a command not found and kills %build before a single crate compiles. An
+# earlier `%if 0%{?suse_version}` guard did not help, because the distro is openSUSE
+# either way; existence of the macro is the actual question.
+%{?limit_build:%limit_build -m 3000}
+
 # --features tauri/custom-protocol is NOT optional. It is what the Tauri CLI adds for
 # you, and tauri's own is_dev() is literally `!cfg!(feature = "custom-protocol")`
 # (tauri/src/lib.rs:309), so a plain `cargo build` produces a DEVELOPMENT binary that
@@ -149,11 +169,15 @@ cd src-tauri
 # would start, show a window, and fail with "Could not connect to localhost: Connection
 # refused". Nothing in the build log warns about it - the tell is the binary coming out
 # roughly a third of its proper size, which %check below now guards.
+# %{?_smp_mflags} is what makes %limit_build above actually DO something: the macro
+# only sets _smp_mflags, so without passing it here cargo would still fan out to every
+# core and the memory cap would be inert. Cargo accepts the same -jN spelling make does.
 cargo build \
     --release \
     --offline \
     --locked \
-    --features tauri/custom-protocol
+    --features tauri/custom-protocol \
+    %{?_smp_mflags}
 
 %install
 install -Dm0755 src-tauri/target/release/lolly-desktop \

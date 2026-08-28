@@ -101,6 +101,37 @@ cargo >= 1.78. Tumbleweed is fine. If Leap's default `rust` is older, add
 built RPM are large. `%global debug_package %{nil}` is set because debuginfo over a
 binary with that much embedded data is enormous and useless.
 
+## Verified build (2026-08-29)
+
+Built successfully on **openSUSE Tumbleweed** in a container, which is what the
+`pkgconfig()` BuildRequires were chosen for - one spec, no per-distro package names:
+
+    lolly-desktop-1.0.0-0.x86_64.rpm    172 MB packaged / 228 MB installed
+
+What that run confirmed, rather than assumed:
+
+- every `pkgconfig()` BuildRequires resolved on Tumbleweed, and its Rust is 1.97.1,
+  clear of the 1.88 floor the dependency tree imposes;
+- the build was genuinely **offline** - no crate downloads in the log;
+- `ORT_LIB_LOCATION` did its job: **no `libonnxruntime` in the package's Requires**,
+  so the ONNX Runtime is statically linked and none of the three targets needs to
+  ship it;
+- both `%check` guards ran and passed;
+- Requires are exactly `libwebkit2gtk-4.1`, `libjavascriptcoregtk-4.1`, `libgtk-3`,
+  `libsoup-3.0` and glibc.
+
+**Leap 16 and Leap 15.6 are still unbuilt.** Tumbleweed clears the Rust floor
+comfortably; 15.6 is the one to watch.
+
+### Do not build on tmpfs
+
+Three builds were lost to this. On a machine where `/tmp` is tmpfs, a build tree there
+is **resident memory**, and a cargo target dir for this package is several GB. It
+surfaces first as rustc dying with `signal: 9, SIGKILL` and no diagnostic - which reads
+like a compiler crash - and later as `Disk quota exceeded (os error 122)` once tmpfs
+hits its ceiling. Neither message mentions tmpfs. Check with `df -h /tmp` and build
+somewhere real.
+
 ## Building locally instead
 
 To test the spec without OBS:
