@@ -29,10 +29,17 @@
 #                          ship webkit2gtk-4.1, GTK3, libsoup3 and OpenSSL, so no
 #                          native dependency needs building here.
 #
-# The git source pulls submodules, which is how the web shell, the community tools and
-# the docs arrive. brands/suse is `update = none` in .gitmodules - it is a PRIVATE pack
-# and git skips it, so a Flathub builder gets the public lolly-start profile. Do not
-# "fix" that by initialising it.
+# SUBMODULES ARE DECLARED ONE BY ONE, AND THAT IS DELIBERATE.
+# flatpak-builder fetches every submodule named in .gitmodules and does NOT honour
+# `update = none` - so letting it recurse makes it try to clone brands/suse, the
+# PRIVATE SUSE pack, and the build dies on a credential prompt (it did, before this
+# was written). A Flathub builder would fail identically, and must never reach that
+# repo anyway. So the top-level source sets disable-submodules and each submodule the
+# build genuinely needs is its own pinned source below.
+#
+# Omitted on purpose: brands/suse (private - its absence is what makes the build
+# resolve to the public lolly-start profile), shells/chrome-extension and
+# shells/tauri-mobile (neither is an npm workspace member nor used by this build).
 id: tools.lolly.Desktop
 
 # Was tools.lolly.desktop until 2026-08-28. flatpak-builder-lint rejects an app id
@@ -131,11 +138,53 @@ modules:
       - install -Dm644 LICENSE /app/share/licenses/tools.lolly.Desktop/LICENSE
 
     sources:
-      # The umbrella repo. Submodules carry the web shell, community tools and docs;
-      # the private brands/suse pack is skipped by its `update = none`.
+      # The umbrella repo: engine/, schemas/, scripts/, profiles.json, the
+      # brands/lolly-start pack, and the packages/* workspaces.
       - type: git
         url: https://github.com/lolly-tools/lolly.git
-        commit: c8917c5ac915e2828fe2f81f91695220630aa6e0
+        commit: 6ad2bb5680f9f238c89bfd4094e09e31b850bbd8
+        disable-submodules: true
+
+      # The submodules this build needs, pinned to what the umbrella commit above
+      # points at. The first five are npm WORKSPACE members - `npm ci` reads every
+      # workspace package.json and fails if one is missing, so they are required even
+      # though the desktop app does not run them.
+      - type: git
+        url: https://github.com/lolly-tools/lolly-web.git
+        commit: e31d9d6a2738ce6721e9c8373a1022cc081c537c
+        dest: shells/web
+      - type: git
+        url: https://github.com/lolly-tools/lolly-cli.git
+        commit: b1a0c33c4010d10d76f8d16884cff7a14a5afa74
+        dest: shells/cli
+      - type: git
+        url: https://github.com/lolly-tools/lolly-tui.git
+        commit: db9229d024e219435677f3277fc2c1d852667f93
+        dest: shells/tui
+      - type: git
+        url: https://github.com/lolly-tools/lolly-ca.git
+        commit: 6ea87b830fdd5b09e8b139b851014a159d86b7f2
+        dest: services/ca
+      - type: git
+        url: https://github.com/lolly-tools/lolly-mcp-server.git
+        commit: 6005abce3bdb172a7ed489f0c64a461fd3636926
+        dest: services/mcp
+      # Not workspaces, but the build reads them: community/ is the public tool set
+      # that scripts/use-profile.ts builds the tools/ view from, and docs/ is what
+      # build:info turns into the /info pages the in-app #/docs reader fetches.
+      - type: git
+        url: https://github.com/lolly-tools/lolly-tools.git
+        commit: 39fc6cc125d175dc163b4d70bfce422b1e17b9af
+        dest: community
+      - type: git
+        url: https://github.com/lolly-tools/lolly-docs.git
+        commit: 7afe789f774a83e908c720e33552a520813fd073
+        dest: docs
+      # The shell being built.
+      - type: git
+        url: https://github.com/lolly-tools/lolly-desktop.git
+        commit: 99eee505624e554a873dad482e69852f6e4cc8b8
+        dest: shells/tauri-desktop
 
       # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to
       # onnxruntime/lib/libonnxruntime.a - a static archive, so the finished app has

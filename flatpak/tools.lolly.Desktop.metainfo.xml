@@ -24,6 +24,28 @@
   </description>
 
   <launchable type="desktop-id">tools.lolly.Desktop.desktop</launchable>
+
+  <!-- Captured from the app's own documentation shots (docs/shots), rasterised
+       from the vector originals. Served from this repo on `main`, which is what
+       AppStream needs: an absolute, publicly reachable URL. -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/lolly-tools/lolly-desktop/main/flatpak/flathub/screenshots/gallery.png</image>
+      <caption>The tool gallery - every tool is data, not bundled code</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/lolly-tools/lolly-desktop/main/flatpak/flathub/screenshots/utilities.png</image>
+      <caption>Utilities for everyday jobs: verify, unpack, convert, capture</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/lolly-tools/lolly-desktop/main/flatpak/flathub/screenshots/brand-studio.png</image>
+      <caption>The brand studio - colours, type and tokens define what every tool renders</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/lolly-tools/lolly-desktop/main/flatpak/flathub/screenshots/export.png</image>
+      <caption>Export to PNG, SVG, PDF or video, rendered on your device</caption>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1" />
 
   <url type="homepage">https://lolly.tools</url>
