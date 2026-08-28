@@ -142,10 +142,18 @@ export CARGO_HOME="$(pwd)/.cargo-home"
 # tauri-build reads ../dist (frontendDist in tauri.conf.json) and embeds it via
 # generate_context!(). It is already in the tarball, prebuilt - see the header.
 cd src-tauri
+# --features tauri/custom-protocol is NOT optional. It is what the Tauri CLI adds for
+# you, and tauri's own is_dev() is literally `!cfg!(feature = "custom-protocol")`
+# (tauri/src/lib.rs:309), so a plain `cargo build` produces a DEVELOPMENT binary that
+# ignores the embedded frontendDist and tries to load devUrl instead. The packaged app
+# would start, show a window, and fail with "Could not connect to localhost: Connection
+# refused". Nothing in the build log warns about it - the tell is the binary coming out
+# roughly a third of its proper size, which %check below now guards.
 cargo build \
     --release \
     --offline \
-    --locked
+    --locked \
+    --features tauri/custom-protocol
 
 %install
 install -Dm0755 src-tauri/target/release/lolly-desktop \
@@ -174,6 +182,19 @@ done
 # changed linking strategy.
 if ldd %{buildroot}%{_bindir}/lolly-desktop | grep -q libonnxruntime; then
     echo "ERROR: linked against a shared libonnxruntime; expected static" >&2
+    exit 1
+fi
+
+# The frontend is embedded into the binary by generate_context!(), so a correct build
+# is ~110 MB and a custom-protocol-less one is ~43 MB. That difference is the ONLY
+# signal: losing the feature still compiles, still links, still produces a binary that
+# starts - it just cannot load its own UI. Anything under 80 MB means the frontend is
+# missing, whether because the feature was dropped or dist/ was empty at compile time.
+sz=$(stat -c %s %{buildroot}%{_bindir}/lolly-desktop)
+if [ "$sz" -lt 80000000 ]; then
+    echo "ERROR: binary is $sz bytes; expected ~110 MB with the frontend embedded." >&2
+    echo "       The frontend is almost certainly missing - check that" >&2
+    echo "       --features tauri/custom-protocol survived and that dist/ was built." >&2
     exit 1
 fi
 

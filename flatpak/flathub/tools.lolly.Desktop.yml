@@ -121,10 +121,14 @@ modules:
       - npm ci --offline --ignore-scripts
 
       # 2) The root postinstall, run by hand because of the above. It builds the
-      #    repo-root tools/ and catalog/ profile VIEWS from profiles.json - with
-      #    brands/suse absent this resolves to the public lolly-start profile, which is
-      #    exactly what we want to ship.
-      - node scripts/use-profile.ts --auto
+      #    repo-root tools/ and catalog/ profile VIEWS.
+      #
+      #    lolly-start is named EXPLICITLY rather than using --auto. profiles.json's
+      #    `default` is "suse" - the PRIVATE pack - and --auto only lands on
+      #    lolly-start because brands/suse happens to be absent here. Naming the
+      #    profile makes shipping public content a stated intent rather than a
+      #    side-effect of a missing directory, and fails loudly if that ever changes.
+      - node scripts/use-profile.ts lolly-start
 
       # 3) The desktop shell has its OWN lockfile (not a workspace member).
       - cd shells/tauri-desktop && npm ci --offline --ignore-scripts
@@ -133,11 +137,30 @@ modules:
       #    docs HTML - without it every in-app #/docs route 404s and the footer
       #    "What?" button goes nowhere. Vite copies tools/ and catalog/ into dist/,
       #    and tauri-build embeds the whole of dist/ into the binary.
-      - cd shells/tauri-desktop && npm run build:frontend
+      #
+      #    LOLLY_EMBED_CATALOG=profile embeds the active tools/ + catalog/ views
+      #    INCLUDING catalog/previews/ - the per-tool gallery thumbnails. The shells
+      #    default to 'neutral', which deliberately carries no previews and no og
+      #    cards (plans/131 WP-A), on the reasoning that brand content arrives from a
+      #    connected instance or a .lolly pack. The visible cost of that is a gallery
+      #    where every tile has to render itself on first load. On lolly-start the
+      #    embedded content IS the public blank brand, so shipping it is safe - which
+      #    is exactly why step 2 pins that profile rather than trusting a fallback.
+      - cd shells/tauri-desktop && LOLLY_EMBED_CATALOG=profile npm run build:frontend
 
-      # 5) The Rust side. --locked so the lockfile we generated sources from is the
-      #    lockfile that gets built.
-      - cd shells/tauri-desktop/src-tauri && cargo build --release --offline --locked
+      # 5) The Rust side.
+      #
+      #    --features tauri/custom-protocol is NOT optional. It is what the Tauri CLI
+      #    normally adds for you, and tauri's own is_dev() is literally
+      #    `!cfg!(feature = "custom-protocol")` (tauri/src/lib.rs:309) - so a plain
+      #    `cargo build` produces a DEVELOPMENT binary that ignores the embedded
+      #    frontendDist and tries to load devUrl instead. The app then starts, shows a
+      #    window, and fails with "Could not connect to localhost: Connection refused",
+      #    while the binary comes out ~43 MB instead of ~112 MB because the frontend
+      #    was never embedded. Nothing in the build log warns about it.
+      #
+      #    --locked so the lockfile we generated cargo sources from is the one built.
+      - cd shells/tauri-desktop/src-tauri && cargo build --release --offline --locked --features tauri/custom-protocol
 
       # 6) Install. The binary is the Cargo package name; everything else is the app id.
       - install -Dm755 shells/tauri-desktop/src-tauri/target/release/lolly-desktop /app/bin/lolly-desktop
@@ -156,7 +179,7 @@ modules:
       # brands/lolly-start pack, and the packages/* workspaces.
       - type: git
         url: https://github.com/lolly-tools/lolly.git
-        commit: 6ad2bb5680f9f238c89bfd4094e09e31b850bbd8
+        commit: 6a833f6f19ca64a5eeba1e8b2634306196a943ea
         disable-submodules: true
 
       # The submodules this build needs, pinned to what the umbrella commit above
@@ -165,7 +188,7 @@ modules:
       # though the desktop app does not run them.
       - type: git
         url: https://github.com/lolly-tools/lolly-web.git
-        commit: e31d9d6a2738ce6721e9c8373a1022cc081c537c
+        commit: b8a08aee9d9e5c9adf851ad82daa7f97c974f2a2
         dest: shells/web
       - type: git
         url: https://github.com/lolly-tools/lolly-cli.git
@@ -197,7 +220,7 @@ modules:
       # The shell being built.
       - type: git
         url: https://github.com/lolly-tools/lolly-desktop.git
-        commit: 99eee505624e554a873dad482e69852f6e4cc8b8
+        commit: a16982063337b24e8ec92c0a439fa47db3ab6691
         dest: shells/tauri-desktop
 
       # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to

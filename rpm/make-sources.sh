@@ -60,17 +60,31 @@ mkdir -p "$stage"
 #    must never be baked into a published RPM.
 # --------------------------------------------------------------------------
 if [ "$skip_frontend" -eq 0 ]; then
-  step "Building frontend (npm run build:frontend)"
-  ( cd "$desktop" && npm run build:frontend )
+  step "Building frontend (LOLLY_EMBED_CATALOG=profile npm run build:frontend)"
+  # profile, not the shells' 'neutral' default: profile embeds catalog/previews/, the
+  # per-tool gallery thumbnails. Neutral deliberately omits them (plans/131 WP-A), and
+  # the visible cost is a gallery where every tile renders itself on first load. Safe
+  # here because the guard above has already established the profile is lolly-start,
+  # the public blank brand.
+  #
+  # Rebuild the previews first if the tool set changed, or you embed stale art:
+  #   npm run build:ort && npm run previews
+  # (build:ort is not optional - previews drives a web build that hard-fails without it.)
+  ( cd "$desktop" && LOLLY_EMBED_CATALOG=profile npm run build:frontend )
 else
   step "Reusing existing dist/ (--skip-frontend)"
 fi
 [ -d "$desktop/dist" ] || die "no dist/ - drop --skip-frontend"
 
-active_profile="$(node -p "require('$repo/profiles.json').active" 2>/dev/null || echo unknown)"
+# The active profile lives in the .lolly-profile STATE FILE, not in profiles.json -
+# profiles.json only carries the `default` (which is "suse"), and reading `.active`
+# off it returns undefined, so an earlier version of this guard could never fire.
+active_profile="$(cat "$repo/.lolly-profile" 2>/dev/null || echo unknown)"
 echo "    active content profile: $active_profile"
 case "$active_profile" in
+  lolly-start) ;;  # the public blank brand - the only thing we may publish
   suse) die "refusing to package the private SUSE profile; run 'npm run profile:start' first" ;;
+  *) die "unrecognised or unset profile '$active_profile'; run 'npm run profile:start'" ;;
 esac
 
 # --------------------------------------------------------------------------
