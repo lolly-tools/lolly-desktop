@@ -104,28 +104,42 @@ modules:
         VITE_MODELS_BASE: https://lolly.tools
 
     build-commands:
-      # node-gyp headers for any package that builds native code offline.
-      - . flatpak-node/setup_sdk_node_headers.sh
+      # 1) Workspace deps.
+      #
+      #    --ignore-scripts is REQUIRED, not tidiness: onnxruntime-node's install
+      #    script reaches api.nuget.org for a native binary, which an offline sandbox
+      #    refuses (EAI_AGAIN) and the whole install fails. It is a root devDependency
+      #    used by tests and the CLI, never by this build, so skipping its script costs
+      #    nothing. No dependency here needs a lifecycle script to be usable: the
+      #    platform packages (@esbuild/linux-x64, @rollup/*, @tauri-apps/cli-linux-*)
+      #    ship their binaries in the package rather than fetching them.
+      #
+      #    That also skips the root's OWN preinstall and postinstall, so the one that
+      #    matters is run explicitly on the next line. (The skipped preinstall,
+      #    scripts/check-bootstrap.ts, only guards against a half-cloned checkout - the
+      #    manifest pins every submodule it needs, so there is nothing for it to catch.)
+      - npm ci --offline --ignore-scripts
 
-      # 1) Workspace deps. postinstall builds the repo-root tools/ and catalog/ profile
-      #    VIEWS from profiles.json - with brands/suse absent this resolves to the
-      #    public lolly-start profile, which is what we want to ship.
-      - npm ci --offline
+      # 2) The root postinstall, run by hand because of the above. It builds the
+      #    repo-root tools/ and catalog/ profile VIEWS from profiles.json - with
+      #    brands/suse absent this resolves to the public lolly-start profile, which is
+      #    exactly what we want to ship.
+      - node scripts/use-profile.ts --auto
 
-      # 2) The desktop shell has its OWN lockfile (not a workspace member).
-      - cd shells/tauri-desktop && npm ci --offline
+      # 3) The desktop shell has its OWN lockfile (not a workspace member).
+      - cd shells/tauri-desktop && npm ci --offline --ignore-scripts
 
-      # 3) Frontend. build:frontend also runs build:info, which generates the /info
+      # 4) Frontend. build:frontend also runs build:info, which generates the /info
       #    docs HTML - without it every in-app #/docs route 404s and the footer
       #    "What?" button goes nowhere. Vite copies tools/ and catalog/ into dist/,
       #    and tauri-build embeds the whole of dist/ into the binary.
       - cd shells/tauri-desktop && npm run build:frontend
 
-      # 4) The Rust side. --locked so the lockfile we generated sources from is the
+      # 5) The Rust side. --locked so the lockfile we generated sources from is the
       #    lockfile that gets built.
       - cd shells/tauri-desktop/src-tauri && cargo build --release --offline --locked
 
-      # 5) Install. The binary is the Cargo package name; everything else is the app id.
+      # 6) Install. The binary is the Cargo package name; everything else is the app id.
       - install -Dm755 shells/tauri-desktop/src-tauri/target/release/lolly-desktop /app/bin/lolly-desktop
       - install -Dm644 shells/tauri-desktop/flatpak/tools.lolly.Desktop.desktop /app/share/applications/tools.lolly.Desktop.desktop
       - install -Dm644 shells/tauri-desktop/flatpak/tools.lolly.Desktop.metainfo.xml /app/share/metainfo/tools.lolly.Desktop.metainfo.xml

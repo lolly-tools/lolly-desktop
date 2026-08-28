@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 import {
   embedContentPlugins, injectModelsBase, resolveEmbedMode,
 } from '../tauri-shared/vite-embed.mjs';
+// Borrowed from the web shell's config, which owns the format. See the plugin list.
+import { precacheManifest } from '../web/vite.config.js';
 
 const webShell  = resolve(__dirname, '../web');
 const repoRoot  = resolve(__dirname, '../..');
@@ -112,11 +114,22 @@ export default defineConfig({
       // invokes site_fetch directly. See tauri-shared/bridge-overrides/site-fetch.ts.
       'site-fetch': resolve(__dirname, 'bridge-overrides/site-fetch.ts'),
     }),
+    // LAST, deliberately: it scans the finished dist/, so it must run after
+    // embedContentPlugins' pruneEmbeddedDownloads has removed dist/models/ - otherwise
+    // the listing describes files that were then deleted. Model entries are filled in
+    // from the committed shells/web/models-manifest.json instead, which is what the
+    // rewrite-served web deploys already rely on.
+    //
+    // Without this the desktop build emitted NO precache.json, and every row of the
+    // "Available offline" manager is gated on it (`partAvailable` in
+    // views/profile.ts), so the whole model list read "Not offered by this server"
+    // even though lolly.tools was serving the models correctly.
     ...embedContentPlugins({
       repoRoot,
       outDirDefault: resolve(__dirname, 'dist'),
       mode: EMBED_CATALOG,
     }),
+    precacheManifest(),
   ],
   // Match shells/web/vite.config.js: the web shell renders ZzFXM songs and encodes
   // video in MODULE workers (src/lib/zzfxm-worker.ts, src/bridge/video-encode.worker.ts),
