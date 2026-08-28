@@ -16,9 +16,14 @@ id: tools.lolly.desktop
 
 # Tauri v2 renders through webkit2gtk-4.1 (GTK3), which the GNOME runtime provides.
 # Keep runtime-version in lockstep with the flatpak-builder container image tag in the
-# CI workflow (gnome-47 -> '47'). Bump both together.
+# CI workflow (gnome-49 -> '49'). Bump both together.
+#
+# Was '47' until 2026-08-28. That was never buildable by anyone who did not already
+# have the runtime cached: GNOME 47 is EOL and Flathub no longer publishes
+# org.gnome.Platform//47 at all, so `flatpak-builder` could not resolve it. Flathub
+# currently offers 49 and 50; 49 is the more settled of the two.
 runtime: org.gnome.Platform
-runtime-version: '47'
+runtime-version: '49'
 sdk: org.gnome.Sdk
 
 # The in-sandbox executable (Cargo package name `lolly-desktop`; no mainBinaryName
@@ -64,9 +69,11 @@ modules:
       #    Tauri version). flatpak-builder auto-exports the .desktop + metainfo.
       - install -Dm644 tools.lolly.desktop.desktop /app/share/applications/tools.lolly.desktop.desktop
       - install -Dm644 tools.lolly.desktop.metainfo.xml /app/share/metainfo/tools.lolly.desktop.metainfo.xml
+      - install -Dm644 icon-32.png  /app/share/icons/hicolor/32x32/apps/tools.lolly.desktop.png
+      - install -Dm644 icon-64.png  /app/share/icons/hicolor/64x64/apps/tools.lolly.desktop.png
       - install -Dm644 icon-128.png /app/share/icons/hicolor/128x128/apps/tools.lolly.desktop.png
       - install -Dm644 icon-256.png /app/share/icons/hicolor/256x256/apps/tools.lolly.desktop.png
-      - install -Dm644 icon-32.png  /app/share/icons/hicolor/32x32/apps/tools.lolly.desktop.png
+      - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/tools.lolly.desktop.png
     sources:
       - type: file
         path: lolly.deb
@@ -75,8 +82,12 @@ modules:
       - type: file
         path: tools.lolly.desktop.metainfo.xml
       - type: file
+        path: icon-32.png
+      - type: file
+        path: icon-64.png
+      - type: file
         path: icon-128.png
       - type: file
         path: icon-256.png
       - type: file
-        path: icon-32.png
+        path: icon-512.png

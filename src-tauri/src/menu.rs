@@ -111,6 +111,17 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
     help.append(&route_item(handle, "Quickstart", "#/docs/quickstart", None)?)?;
     help.append(&route_item(handle, "Documentation", "#/docs/index", None)?)?;
     help.append(&route_item(handle, "Ask Lolly", "#/ask", None)?)?;
+    // "About Lolly" opens the docs site rather than a version dialog. Tauri's
+    // `Menu::default()` puts a PredefinedMenuItem::about - a GTK/Windows dialog
+    // listing version and copyright - in ITS OWN "Help" submenu on non-macOS, which
+    // both duplicated the Help menu and sent the most-clicked first-run item to a
+    // dead end. The default Help submenu is dropped below; this replaces its one
+    // item with `#/docs/index` - the /info docs home, rehosted in-app.
+    #[cfg(not(target_os = "macos"))]
+    {
+        help.append(&PredefinedMenuItem::separator(handle)?)?;
+        help.append(&route_item(handle, "About Lolly", "#/docs/index", None)?)?;
+    }
 
     // Placement: Go after View (classic macOS order), Tools after Go, the
     // Appearance submenu inside View when it exists, Open Exports Folder in
@@ -119,6 +130,8 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
         MenuItem::with_id(handle, "open_exports", "Open Exports Folder", true, None::<&str>)?;
     let mut go_pos = None;
     let mut exports_placed = false;
+    // Deferred so the removal cannot shift the indices `go_pos` is measured in.
+    let mut default_help = None;
     if let Ok(items) = menu.items() {
         for (i, item) in items.iter().enumerate() {
             let Some(sub) = item.as_submenu() else { continue };
@@ -132,6 +145,11 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
                     let _ = sub.append(&open_exports);
                     exports_placed = true;
                 }
+                // Mark the default Help submenu for removal so ours is the only
+                // one. On non-macOS it holds a single PredefinedMenuItem::about
+                // dialog, which `help` above replaces with a route to the docs; on
+                // macOS it is empty and the About stays in the app submenu.
+                Some("Help") => default_help = Some(item.clone()),
                 _ => {}
             }
         }
@@ -150,6 +168,10 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
     }
     if !exports_placed {
         menu.append(&Submenu::with_items(handle, "Exports", true, &[&open_exports])?)?;
+    }
+    // After the inserts above, so removing it cannot move `go_pos`.
+    if let Some(item) = default_help {
+        let _ = menu.remove(&item);
     }
     menu.append(&help)?;
 
