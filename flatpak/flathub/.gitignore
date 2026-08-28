@@ -1,0 +1,5 @@
+# flatpak-builder scratch - never commit.
+.flatpak-builder/
+build-dir/
+repo/
+*.flatpak

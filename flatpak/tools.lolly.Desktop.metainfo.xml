@@ -3,7 +3,7 @@
      launchable MUST equal the installed .desktop file name, or `appstreamcli compose`
      (run by flatpak-builder) will drop the app from the catalog. -->
 <component type="desktop-application">
-  <id>tools.lolly.desktop</id>
+  <id>tools.lolly.Desktop</id>
   <name>Lolly</name>
   <summary>Generate on-brand creative assets from simple inputs</summary>
 
@@ -23,12 +23,12 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">tools.lolly.desktop.desktop</launchable>
+  <launchable type="desktop-id">tools.lolly.Desktop.desktop</launchable>
   <content_rating type="oars-1.1" />
 
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
-    <release version="0.1.0" date="2026-07-06" />
+    <release version="1.0.0" date="2026-08-28" />
   </releases>
 </component>

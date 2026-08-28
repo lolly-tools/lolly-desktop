@@ -20,13 +20,13 @@ tauri build --bundles deb  ──►  Lolly_x.y.z_amd64.deb  ──►  flatpak-
 
 | File | Role |
 |---|---|
-| `tools.lolly.desktop.yml` | flatpak-builder manifest (app id = the Tauri `identifier`) |
-| `tools.lolly.desktop.desktop` | desktop entry (exported to the host menu) |
-| `tools.lolly.desktop.metainfo.xml` | AppStream metadata (id must match the app id) |
+| `tools.lolly.Desktop.yml` | flatpak-builder manifest (app id = the Tauri `identifier`) |
+| `tools.lolly.Desktop.desktop` | desktop entry (exported to the host menu) |
+| `tools.lolly.Desktop.metainfo.xml` | AppStream metadata (id must match the app id) |
 | `icon-{32,128,256}.png` | hicolor icons, copied from `../src-tauri/icons/` |
 | `lolly.deb` | **not committed** - the built package, staged here before building |
 
-The app id `tools.lolly.desktop`, the runtime (`org.gnome.Platform//47`, which provides
+The app id `tools.lolly.Desktop`, the runtime (`org.gnome.Platform//47`, which provides
 the `webkit2gtk-4.1` Tauri needs), and the binary name (`lolly-desktop`, the Cargo
 package name) all have to stay in agreement. If you set `mainBinaryName` in
 `tauri.conf.json`, update `command:` and the `install` path in the manifest to match.
@@ -47,14 +47,14 @@ cp src-tauri/target/release/bundle/deb/*.deb flatpak/lolly.deb
 # 3) build + install the Flatpak
 cd flatpak
 flatpak install -y flathub org.gnome.Platform//47 org.gnome.Sdk//47
-flatpak-builder --user --install --force-clean build-dir tools.lolly.desktop.yml
+flatpak-builder --user --install --force-clean build-dir tools.lolly.Desktop.yml
 
 # 4) run it
-flatpak run tools.lolly.desktop
+flatpak run tools.lolly.Desktop
 
 # (optional) export a shippable single-file bundle
-flatpak-builder --user --force-clean --repo=repo build-dir tools.lolly.desktop.yml
-flatpak build-bundle repo Lolly.flatpak tools.lolly.desktop
+flatpak-builder --user --force-clean --repo=repo build-dir tools.lolly.Desktop.yml
+flatpak build-bundle repo Lolly.flatpak tools.lolly.Desktop
 ```
 
 ## First-run things to verify

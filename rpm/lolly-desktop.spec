@@ -40,7 +40,7 @@
 # ---------------------------------------------------------------------------
 
 Name:           lolly-desktop
-Version:        0.1.0
+Version:        1.0.0
 Release:        0
 Summary:        Generate on-brand creative assets from simple inputs
 License:        MPL-2.0
@@ -152,17 +152,17 @@ install -Dm0755 src-tauri/target/release/lolly-desktop \
     %{buildroot}%{_bindir}/lolly-desktop
 
 # Desktop entry and AppStream metainfo. The component id, the .desktop basename and
-# the icon name are all the Tauri identifier (tools.lolly.desktop) and must stay in
+# the icon name are all the Tauri identifier (tools.lolly.Desktop) and must stay in
 # agreement or appstream drops the app from the catalog.
-install -Dm0644 packaging/tools.lolly.desktop.desktop \
-    %{buildroot}%{_datadir}/applications/tools.lolly.desktop.desktop
-install -Dm0644 packaging/tools.lolly.desktop.metainfo.xml \
-    %{buildroot}%{_datadir}/metainfo/tools.lolly.desktop.metainfo.xml
+install -Dm0644 packaging/tools.lolly.Desktop.desktop \
+    %{buildroot}%{_datadir}/applications/tools.lolly.Desktop.desktop
+install -Dm0644 packaging/tools.lolly.Desktop.metainfo.xml \
+    %{buildroot}%{_datadir}/metainfo/tools.lolly.Desktop.metainfo.xml
 
 for size in 32 64 128 256 512; do
     if [ -f "packaging/icon-${size}.png" ]; then
         install -Dm0644 "packaging/icon-${size}.png" \
-            "%{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/tools.lolly.desktop.png"
+            "%{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/tools.lolly.Desktop.png"
     fi
 done
 
@@ -181,8 +181,8 @@ fi
 %license LICENSE
 %doc README.md
 %{_bindir}/lolly-desktop
-%{_datadir}/applications/tools.lolly.desktop.desktop
-%{_datadir}/metainfo/tools.lolly.desktop.metainfo.xml
-%{_datadir}/icons/hicolor/*/apps/tools.lolly.desktop.png
+%{_datadir}/applications/tools.lolly.Desktop.desktop
+%{_datadir}/metainfo/tools.lolly.Desktop.metainfo.xml
+%{_datadir}/icons/hicolor/*/apps/tools.lolly.Desktop.png
 
 %changelog

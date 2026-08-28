@@ -132,8 +132,8 @@ cp -a "$desktop/README.md" "$stage/README.md"
 # Freedesktop metadata. Single source of truth is flatpak/ - the .desktop, the
 # metainfo and the icons are app metadata, not Flatpak-specific, and both packagings
 # install the identical files. Keep them there so the two cannot drift.
-cp -a "$desktop/flatpak/tools.lolly.desktop.desktop"    "$stage/packaging/"
-cp -a "$desktop/flatpak/tools.lolly.desktop.metainfo.xml" "$stage/packaging/"
+cp -a "$desktop/flatpak/tools.lolly.Desktop.desktop"    "$stage/packaging/"
+cp -a "$desktop/flatpak/tools.lolly.Desktop.metainfo.xml" "$stage/packaging/"
 for s in 32 64 128 256 512; do
   cp -a "$desktop/flatpak/icon-$s.png" "$stage/packaging/"
 done

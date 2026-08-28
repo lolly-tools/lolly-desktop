@@ -1,0 +1,158 @@
+# Flathub manifest for Lolly - builds ENTIRELY FROM SOURCE, offline.
+#
+# This is NOT the manifest in the parent directory. Two manifests exist because they
+# answer to different masters:
+#
+#   ../tools.lolly.Desktop.yml  unpacks a prebuilt .deb. Fast, and fine for the
+#                               bundles we hand out ourselves, but Flathub forbids
+#                               prebuilt binaries outright.
+#   this one                    compiles everything inside the offline build sandbox,
+#                               which is what Flathub requires.
+#
+# Keep them in agreement on: app id, runtime version, command, finish-args, and the
+# freedesktop metadata they install. Only the build strategy differs.
+#
+# THE OFFLINE PROBLEM, AND HOW EACH PART IS SOLVED
+#
+#   ~600 cargo crates   -> cargo-sources.json, from flatpak-cargo-generator.py
+#   ~700 npm packages   -> node-sources.json, from flatpak-node-generator over BOTH
+#                          lockfiles (the root workspace and the desktop shell, which
+#                          is deliberately not a workspace member and has its own).
+#                          They merge with zero conflicts; see ./README.md.
+#   ONNX Runtime        -> ort-sys DOWNLOADS this from its own build.rs via ureq, which
+#                          fails during the build rather than at resolution time.
+#                          Declaring it as a source and pointing ORT_LIB_LOCATION at it
+#                          makes ort-sys skip the download and link statically. The URL
+#                          and sha256 are the crate's own, read out of the vendored
+#                          ort-sys dist.txt, so they cannot drift from the pin.
+#   Rust + Node         -> SDK extensions. The GNOME SDK ships neither, but it DOES
+#                          ship webkit2gtk-4.1, GTK3, libsoup3 and OpenSSL, so no
+#                          native dependency needs building here.
+#
+# The git source pulls submodules, which is how the web shell, the community tools and
+# the docs arrive. brands/suse is `update = none` in .gitmodules - it is a PRIVATE pack
+# and git skips it, so a Flathub builder gets the public lolly-start profile. Do not
+# "fix" that by initialising it.
+id: tools.lolly.Desktop
+
+# Was tools.lolly.desktop until 2026-08-28. flatpak-builder-lint rejects an app id
+# whose last component is a lowercase "desktop" (appid-ends-with-lowercase-desktop),
+# and the Flathub docs say that exception "is never granted". Renaming also moves the
+# app data directory, which is why it had to happen before 1.0.0 rather than after.
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+
+# rust-stable 1.98 and node24 24.20.0 on the 25.08 branch that GNOME 49 is built on.
+# The dependency tree needs Rust >= 1.88 (darling 0.23, icu_collections 2.2,
+# headless_chrome 1.0), and .nvmrc pins Node 24 - both are satisfied.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node24
+
+command: lolly-desktop
+
+finish-args:
+  # Rendering: Wayland first, X11 fallback, GPU access for the webview compositor.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --share=ipc
+  # Network: catalog/asset sync and the tauri-plugin-http net bridge. Renders happen
+  # on-device; this is not telemetry.
+  - --share=network
+  # Somewhere to save exports. App state lives in the per-app dir Flatpak grants
+  # automatically, so no broader filesystem access is needed.
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+  # The DMABUF renderer shows a blank window under the sandbox on some GPU/driver
+  # combinations. Drop once that is no longer true of the runtime.
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+modules:
+  - name: lolly
+    buildsystem: simple
+
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node24/bin
+      env:
+        # Cargo: the generated sources drop the registry and a config here. The path
+        # must match the module name ("lolly"), which is where flatpak-builder puts it.
+        CARGO_HOME: /run/build/lolly/cargo
+        CARGO_NET_OFFLINE: 'true'
+        # ONNX Runtime: the directory ABOVE lib/, which is the layout ort-sys's
+        # prepare_libort_dir() expects. ORT_SKIP_DOWNLOAD is belt and braces - if
+        # ORT_LIB_LOCATION were ever ignored, this fails the build instead of hanging
+        # on a network call the sandbox will refuse.
+        ORT_LIB_LOCATION: /run/build/lolly/onnxruntime
+        ORT_SKIP_DOWNLOAD: '1'
+        # npm: install from the generated offline cache, never the network.
+        npm_config_cache: /run/build/lolly/flatpak-node/npm-cache
+        npm_config_offline: 'true'
+        npm_config_audit: 'false'
+        npm_config_fund: 'false'
+        # The frontend reads this for its model download base; the models themselves
+        # are NOT bundled (vite.config.js prunes dist/models - embedding ~1.8 GB tips
+        # the crate's rlib past the 32-bit ar archive-offset limit).
+        VITE_MODELS_BASE: https://lolly.tools
+
+    build-commands:
+      # node-gyp headers for any package that builds native code offline.
+      - . flatpak-node/setup_sdk_node_headers.sh
+
+      # 1) Workspace deps. postinstall builds the repo-root tools/ and catalog/ profile
+      #    VIEWS from profiles.json - with brands/suse absent this resolves to the
+      #    public lolly-start profile, which is what we want to ship.
+      - npm ci --offline
+
+      # 2) The desktop shell has its OWN lockfile (not a workspace member).
+      - cd shells/tauri-desktop && npm ci --offline
+
+      # 3) Frontend. build:frontend also runs build:info, which generates the /info
+      #    docs HTML - without it every in-app #/docs route 404s and the footer
+      #    "What?" button goes nowhere. Vite copies tools/ and catalog/ into dist/,
+      #    and tauri-build embeds the whole of dist/ into the binary.
+      - cd shells/tauri-desktop && npm run build:frontend
+
+      # 4) The Rust side. --locked so the lockfile we generated sources from is the
+      #    lockfile that gets built.
+      - cd shells/tauri-desktop/src-tauri && cargo build --release --offline --locked
+
+      # 5) Install. The binary is the Cargo package name; everything else is the app id.
+      - install -Dm755 shells/tauri-desktop/src-tauri/target/release/lolly-desktop /app/bin/lolly-desktop
+      - install -Dm644 shells/tauri-desktop/flatpak/tools.lolly.Desktop.desktop /app/share/applications/tools.lolly.Desktop.desktop
+      - install -Dm644 shells/tauri-desktop/flatpak/tools.lolly.Desktop.metainfo.xml /app/share/metainfo/tools.lolly.Desktop.metainfo.xml
+      - install -Dm644 shells/tauri-desktop/flatpak/icon-32.png  /app/share/icons/hicolor/32x32/apps/tools.lolly.Desktop.png
+      - install -Dm644 shells/tauri-desktop/flatpak/icon-64.png  /app/share/icons/hicolor/64x64/apps/tools.lolly.Desktop.png
+      - install -Dm644 shells/tauri-desktop/flatpak/icon-128.png /app/share/icons/hicolor/128x128/apps/tools.lolly.Desktop.png
+      - install -Dm644 shells/tauri-desktop/flatpak/icon-256.png /app/share/icons/hicolor/256x256/apps/tools.lolly.Desktop.png
+      - install -Dm644 shells/tauri-desktop/flatpak/icon-512.png /app/share/icons/hicolor/512x512/apps/tools.lolly.Desktop.png
+      # Flathub requires the licence be installed under the app id.
+      - install -Dm644 LICENSE /app/share/licenses/tools.lolly.Desktop/LICENSE
+
+    sources:
+      # The umbrella repo. Submodules carry the web shell, community tools and docs;
+      # the private brands/suse pack is skipped by its `update = none`.
+      - type: git
+        url: https://github.com/lolly-tools/lolly.git
+        commit: c8917c5ac915e2828fe2f81f91695220630aa6e0
+
+      # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to
+      # onnxruntime/lib/libonnxruntime.a - a static archive, so the finished app has
+      # no libonnxruntime runtime dependency at all.
+      - type: archive
+        url: https://cdn.pyke.io/0/pyke:ort-rs/ms@1.22.0/x86_64-unknown-linux-gnu.tgz
+        sha256: ed1716de95974bf47ab0223ca33734a0b5a5d09a181225d0e8ed62d070aea893
+        dest: onnxruntime
+        strip-components: 1
+        only-arches: [x86_64]
+      - type: archive
+        url: https://cdn.pyke.io/0/pyke:ort-rs/ms@1.22.0/aarch64-unknown-linux-gnu.tgz
+        sha256: 24e4760207136fc50b854bb5012ab81de6189039cf6d4fd3f5b8d3db7e929f1e
+        dest: onnxruntime
+        strip-components: 1
+        only-arches: [aarch64]
+
+      # Generated - do not hand-edit. See ./README.md for the regeneration commands.
+      - cargo-sources.json
+      - node-sources.json
