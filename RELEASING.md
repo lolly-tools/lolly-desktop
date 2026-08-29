@@ -32,7 +32,7 @@ omission shipped as a silent, user-visible hole:
 |---|---|---|
 | `build:info` | `/info` HTML absent, so every in-app `#/docs` route 404s and the footer "What?" button does nothing | **fixed** - `build:frontend` runs it |
 | `precacheManifest` | no `dist/precache.json`, so the whole "Available offline" model list reads "Not offered by this server" | **fixed** - plugin added to this shell's vite config |
-| `build:ort` | `/ort/` and `/ort-hf/` unstaged; ordinary use is fine (ORT wasm is bundled into `/assets/`) but the speech worker's pinned transformers runtime is missing, so fully-offline speech may be incomplete | **still open** |
+| `build:ort` | `/ort/` and `/ort-hf/` unstaged. Worse than it first looked: `lib/ort.ts` pins `wasmPaths = '/ort/'` same-origin, so with no `/ort/` in the bundle **every on-device ML tool fails to load its wasm** - background removal, upscale, OCR, ai-detect, reword | **fixed** - `build:frontend` runs it |
 
 `build:ort` also **blocks the web build outright** on a fresh clone, which makes it
 worse than it looks. `vite.config.js`'s `ortWasmFromPublic()` plugin hard-fails:
