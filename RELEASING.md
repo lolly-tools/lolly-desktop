@@ -99,6 +99,12 @@ structurally, by pinning only public submodules and never fetching `brands/suse`
 - Bump `runtime-version` and the CI container tag together. GNOME 47 is EOL and no
   longer published, which is why the manifest moved to 49.
 
+## Arch / AUR
+
+The AUR package (`lolly-desktop-bin`) repacks the released `.deb`, integration files
+and all - the PKGBUILD lives in `linux/arch/`, with its README covering the
+per-release ritual: bump `pkgver`, update `sha256sums`, regenerate `.SRCINFO`, push to AUR.
+
 ## Before you call a build good
 
 1. Binary size is ~110 MB, not ~43 MB.
