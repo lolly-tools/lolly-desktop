@@ -43,6 +43,40 @@
         "name": "lolly",
         "role": "Editor"
       }
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/mime/packages/tools.lolly.Desktop.xml": "../linux/mime/tools.lolly.Desktop.xml",
+          "/usr/bin/lolly-thumbnail": "../linux/thumbnailer/lolly-thumbnail",
+          "/usr/share/thumbnailers/lolly.thumbnailer": "../linux/thumbnailer/lolly.thumbnailer",
+          "/usr/share/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini": "../linux/search/packaged.search-provider.ini",
+          "/usr/share/dbus-1/services/tools.lolly.Desktop.SearchProvider.service": "../linux/search/tools.lolly.Desktop.SearchProvider.service",
+          "/usr/share/dbus-1/services/org.lolly.Desktop1.service": "../linux/search/org.lolly.Desktop1.service",
+          "/usr/share/kio/servicemenus/lolly-utilities.desktop": "../linux/kde/lolly-utilities.desktop",
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/32x32/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/48x48/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/64x64/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/128x128/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/256x256/application-vnd.lolly+zip.png"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/mime/packages/tools.lolly.Desktop.xml": "../linux/mime/tools.lolly.Desktop.xml",
+          "/usr/bin/lolly-thumbnail": "../linux/thumbnailer/lolly-thumbnail",
+          "/usr/share/thumbnailers/lolly.thumbnailer": "../linux/thumbnailer/lolly.thumbnailer",
+          "/usr/share/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini": "../linux/search/packaged.search-provider.ini",
+          "/usr/share/dbus-1/services/tools.lolly.Desktop.SearchProvider.service": "../linux/search/tools.lolly.Desktop.SearchProvider.service",
+          "/usr/share/dbus-1/services/org.lolly.Desktop1.service": "../linux/search/org.lolly.Desktop1.service",
+          "/usr/share/kio/servicemenus/lolly-utilities.desktop": "../linux/kde/lolly-utilities.desktop",
+          "/usr/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/32x32/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/48x48/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/48x48/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/64x64/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/64x64/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/128x128/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/128x128/application-vnd.lolly+zip.png",
+          "/usr/share/icons/hicolor/256x256/mimetypes/application-vnd.lolly+zip.png": "../linux/icons/256x256/application-vnd.lolly+zip.png"
+        }
+      }
+    }
   }
 }

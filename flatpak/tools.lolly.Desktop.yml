@@ -93,6 +93,11 @@ modules:
       - install -Dm644 org.lolly.Desktop1.service /app/share/dbus-1/services/org.lolly.Desktop1.service
       - install -Dm755 lolly-thumbnail /app/bin/lolly-thumbnail
       - install -Dm644 lolly.thumbnailer /app/share/thumbnailers/lolly.thumbnailer
+      - install -Dm644 lolly-mime-32.png /app/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 lolly-mime-48.png /app/share/icons/hicolor/48x48/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 lolly-mime-64.png /app/share/icons/hicolor/64x64/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 lolly-mime-128.png /app/share/icons/hicolor/128x128/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 lolly-mime-256.png /app/share/icons/hicolor/256x256/mimetypes/application-vnd.lolly+zip.png
     sources:
       - type: file
         path: lolly.deb
@@ -127,3 +132,18 @@ modules:
         path: ../linux/thumbnailer/lolly-thumbnail
       - type: file
         path: ../linux/thumbnailer/lolly.thumbnailer
+      - type: file
+        path: ../linux/icons/32x32/application-vnd.lolly+zip.png
+        dest-filename: lolly-mime-32.png
+      - type: file
+        path: ../linux/icons/48x48/application-vnd.lolly+zip.png
+        dest-filename: lolly-mime-48.png
+      - type: file
+        path: ../linux/icons/64x64/application-vnd.lolly+zip.png
+        dest-filename: lolly-mime-64.png
+      - type: file
+        path: ../linux/icons/128x128/application-vnd.lolly+zip.png
+        dest-filename: lolly-mime-128.png
+      - type: file
+        path: ../linux/icons/256x256/application-vnd.lolly+zip.png
+        dest-filename: lolly-mime-256.png

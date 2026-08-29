@@ -98,6 +98,16 @@ pub fn classify(args: &[String]) -> Mode {
         // Unknown leading flag → GUI. Covers `-psn_…` and any future `--flag` that
         // isn't a CLI verb, so the window still opens rather than erroring.
         return Mode::Gui;
+    } else if first.starts_with("lolly://") || std::path::Path::new(first).exists() {
+        // A deep link or an existing file path is the DESKTOP handing us
+        // something to open (plans/174: "Open With" from a file manager, a
+        // double-clicked .lolly, an x-scheme-handler launch) - never a tool id.
+        // GUI mode keeps the argv; run_gui's classify_argv turns it into
+        // openFile/deepLink events, or forwards it to the running instance.
+        // Without this branch the bare-tool sugar below ate the path and the
+        // app died with `unknown tool "home/…/x.lolly"` - the first real
+        // double-click found it (2026-08-30).
+        return Mode::Gui;
     } else {
         // Bare-tool sugar: `Lolly qr-code --url=…` or a pasted lolly.tools link.
         (first.as_str(), &args[1..])

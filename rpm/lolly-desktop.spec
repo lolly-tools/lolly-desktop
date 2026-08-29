@@ -294,6 +294,12 @@ fi
 %dir %{_datadir}/kio/servicemenus
 %{_datadir}/kio/servicemenus/lolly-utilities.desktop
 
+/usr/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png
+/usr/share/icons/hicolor/48x48/mimetypes/application-vnd.lolly+zip.png
+/usr/share/icons/hicolor/64x64/mimetypes/application-vnd.lolly+zip.png
+/usr/share/icons/hicolor/128x128/mimetypes/application-vnd.lolly+zip.png
+/usr/share/icons/hicolor/256x256/mimetypes/application-vnd.lolly+zip.png
+
 %changelog
 * Sun Aug 30 2026 Andy Fitzsimon <andyfitz@gmail.com> - 1.0.1-0
 - Linux desktop integration (plans/174): .lolly file association + thumbnailer,
