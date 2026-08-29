@@ -85,13 +85,25 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
+    <release version="1.0.1" date="2026-08-30">
+      <description>
+        <p>At home on the Linux desktop:</p>
+        <ul>
+          <li>.lolly files open from the file manager, with thumbnails for shared sessions</li>
+          <li>lolly:// links deep-link straight into tools</li>
+          <li>Pick colours from anywhere on screen - the eyedropper now reaches every window</li>
+          <li>Set any render as your wallpaper, with your desktop confirming first</li>
+          <li>Find tools from GNOME search and KRunner</li>
+          <li>A tray shortcut turns a copied link into a QR code - the clipboard is read only when you click</li>
+          <li>Watch a hot folder to pull new files into your uploads</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-08-29">
       <description>
         <p>
-          First packaged release: the full tool gallery and brand studio, on-device
-          export to PNG, SVG, PDF and video, and Linux desktop integration - .lolly
-          files open (and thumbnail) from the file manager, lolly:// links deep-link
-          into tools, and GNOME Shell search finds tools by name.
+          First packaged release: the full tool gallery and brand studio, with
+          on-device export to PNG, SVG, PDF and video.
         </p>
       </description>
     </release>

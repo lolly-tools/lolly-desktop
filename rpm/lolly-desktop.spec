@@ -40,7 +40,7 @@
 # ---------------------------------------------------------------------------
 
 Name:           lolly-desktop
-Version:        1.0.0
+Version:        1.0.1
 Release:        0
 Summary:        Generate on-brand creative assets from simple inputs
 License:        MPL-2.0
@@ -295,3 +295,11 @@ fi
 %{_datadir}/kio/servicemenus/lolly-utilities.desktop
 
 %changelog
+* Sun Aug 30 2026 Andy Fitzsimon <andyfitz@gmail.com> - 1.0.1-0
+- Linux desktop integration (plans/174): .lolly file association + thumbnailer,
+  lolly:// deep links, XDG-portal colour picker and wallpaper, GNOME Shell and
+  KRunner search providers, clipboard-lens tray, hot folder, org.lolly.Desktop1
+  D-Bus automation surface.
+
+* Sat Aug 29 2026 Andy Fitzsimon <andyfitz@gmail.com> - 1.0.0-0
+- First packaged release: tool gallery, brand studio, on-device export.
