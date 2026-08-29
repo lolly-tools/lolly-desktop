@@ -198,6 +198,28 @@ for size in 32 64 128 256 512; do
     fi
 done
 
+# Freedesktop integration, single-sourced from linux/ (see linux/README.md for
+# what each file is): the .lolly MIME type, the GNOME Files thumbnailer, the GNOME
+# Shell search-provider registration + D-Bus activation, and the KDE service menu.
+# Placements mirror the Flatpak manifest's /app/share ones under /usr/share.
+install -Dm0644 linux/mime/tools.lolly.Desktop.xml \
+    %{buildroot}%{_datadir}/mime/packages/tools.lolly.Desktop.xml
+install -Dm0755 linux/thumbnailer/lolly-thumbnail \
+    %{buildroot}%{_bindir}/lolly-thumbnail
+install -Dm0644 linux/thumbnailer/lolly.thumbnailer \
+    %{buildroot}%{_datadir}/thumbnailers/lolly.thumbnailer
+install -Dm0644 linux/search/tools.lolly.Desktop.search-provider.ini \
+    %{buildroot}%{_datadir}/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini
+install -Dm0644 linux/search/tools.lolly.Desktop.SearchProvider.service \
+    %{buildroot}%{_datadir}/dbus-1/services/tools.lolly.Desktop.SearchProvider.service
+install -Dm0644 linux/search/org.lolly.Desktop1.service \
+    %{buildroot}%{_datadir}/dbus-1/services/org.lolly.Desktop1.service
+# kio/servicemenus is the KF5 >= 5.85 / KF6 location Dolphin reads today (Leap 16
+# and Tumbleweed are both Plasma 6); the legacy kservices5/ServiceMenus path is not
+# shipped - installing to both would double the menu on transitional systems.
+install -Dm0644 linux/kde/lolly-utilities.desktop \
+    %{buildroot}%{_datadir}/kio/servicemenus/lolly-utilities.desktop
+
 %fdupes %{buildroot}%{_datadir}/icons
 
 %check
@@ -222,6 +244,33 @@ if [ "$sz" -lt 80000000 ]; then
     exit 1
 fi
 
+# Cache refreshes for the freedesktop files above. Current openSUSE and Fedora
+# run these from file triggers in shared-mime-info/desktop-file-utils, so each call
+# is guarded on the binary existing and never fails the transaction - the guard
+# style matches what those distros' own packages do, and a headless install (no
+# GUI stack) simply skips them.
+%post
+if [ -x /usr/bin/update-mime-database ]; then
+    /usr/bin/update-mime-database %{_datadir}/mime >/dev/null 2>&1 || :
+fi
+if [ -x /usr/bin/update-desktop-database ]; then
+    /usr/bin/update-desktop-database %{_datadir}/applications >/dev/null 2>&1 || :
+fi
+if [ -x /usr/bin/gtk-update-icon-cache ]; then
+    /usr/bin/gtk-update-icon-cache -q %{_datadir}/icons/hicolor >/dev/null 2>&1 || :
+fi
+
+%postun
+if [ -x /usr/bin/update-mime-database ]; then
+    /usr/bin/update-mime-database %{_datadir}/mime >/dev/null 2>&1 || :
+fi
+if [ -x /usr/bin/update-desktop-database ]; then
+    /usr/bin/update-desktop-database %{_datadir}/applications >/dev/null 2>&1 || :
+fi
+if [ -x /usr/bin/gtk-update-icon-cache ]; then
+    /usr/bin/gtk-update-icon-cache -q %{_datadir}/icons/hicolor >/dev/null 2>&1 || :
+fi
+
 %files
 %license LICENSE
 %doc README.md
@@ -229,5 +278,20 @@ fi
 %{_datadir}/applications/tools.lolly.Desktop.desktop
 %{_datadir}/metainfo/tools.lolly.Desktop.metainfo.xml
 %{_datadir}/icons/hicolor/*/apps/tools.lolly.Desktop.png
+%{_bindir}/lolly-thumbnail
+%{_datadir}/mime/packages/tools.lolly.Desktop.xml
+%{_datadir}/dbus-1/services/tools.lolly.Desktop.SearchProvider.service
+%{_datadir}/dbus-1/services/org.lolly.Desktop1.service
+# Own the parent dirs that only exist when their consumer is installed - a KDE-less
+# GNOME box has no kio/, a GNOME-less KDE box has no gnome-shell/, and thumbnailers/
+# belongs to no base package on either.
+%dir %{_datadir}/thumbnailers
+%{_datadir}/thumbnailers/lolly.thumbnailer
+%dir %{_datadir}/gnome-shell
+%dir %{_datadir}/gnome-shell/search-providers
+%{_datadir}/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini
+%dir %{_datadir}/kio
+%dir %{_datadir}/kio/servicemenus
+%{_datadir}/kio/servicemenus/lolly-utilities.desktop
 
 %changelog

@@ -25,6 +25,40 @@
 
   <launchable type="desktop-id">tools.lolly.Desktop.desktop</launchable>
 
+  <!-- Software-center polish. Branding colours are the brand greens the app ships
+       (light: the primary green; dark: the deep pine the dark theme grounds on) -
+       GNOME Software paints the banner with these. Categories mirror the .desktop's
+       Categories=; keywords extend its Keywords= for store search. -->
+  <branding>
+    <color type="primary" scheme_preference="light">#30ba78</color>
+    <color type="primary" scheme_preference="dark">#0c322c</color>
+  </branding>
+
+  <categories>
+    <category>Graphics</category>
+    <category>2DGraphics</category>
+  </categories>
+
+  <keywords>
+    <keyword>brand</keyword>
+    <keyword>design</keyword>
+    <keyword>qr</keyword>
+    <keyword>svg</keyword>
+    <keyword>pdf</keyword>
+    <keyword>chart</keyword>
+    <keyword>template</keyword>
+    <keyword>badge</keyword>
+    <keyword>poster</keyword>
+  </keywords>
+
+  <!-- What the package integrates with, machine-readably: the .lolly bundle type
+       (linux/mime/tools.lolly.Desktop.xml) and the automation bus name the running
+       app owns (linux/search/org.lolly.Desktop1.service). -->
+  <provides>
+    <mediatype>application/vnd.lolly+zip</mediatype>
+    <dbus type="user">org.lolly.Desktop1</dbus>
+  </provides>
+
   <!-- Captured from the app's own documentation shots (docs/shots), rasterised
        from the vector originals. Served from this repo on `main`, which is what
        AppStream needs: an absolute, publicly reachable URL. -->
@@ -51,6 +85,15 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
-    <release version="1.0.0" date="2026-08-28" />
+    <release version="1.0.0" date="2026-08-29">
+      <description>
+        <p>
+          First packaged release: the full tool gallery and brand studio, on-device
+          export to PNG, SVG, PDF and video, and Linux desktop integration - .lolly
+          files open (and thumbnail) from the file manager, lolly:// links deep-link
+          into tools, and GNOME Shell search finds tools by name.
+        </p>
+      </description>
+    </release>
   </releases>
 </component>

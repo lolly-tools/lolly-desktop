@@ -1,5 +1,6 @@
 mod capture;
 mod cli;
+mod desktop_integration;
 mod menu;
 mod native_transport;
 mod nearby;
@@ -46,6 +47,14 @@ fn run_gui(context: tauri::Context) {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
+        // One running app per user (plans/174): a second launch (file-manager
+        // "Open with", a lolly:// click) forwards its argv here and exits; the
+        // classifier turns it into openFile/deepLink events the webview polls.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            desktop_integration::classify_argv(app, &argv[1..]);
+        }))
+        .manage(desktop_integration::DesktopEvents::default())
+        .manage(desktop_integration::HotFolder::default())
         // The shared authenticated-capture session (persistent Chrome profile + the
         // optional live sign-in browser captures ride). Managed here so both the
         // capture commands and the sign-in/clear commands see the same instance.
@@ -60,6 +69,14 @@ fn run_gui(context: tauri::Context) {
         .menu(|handle| menu::build_menu(handle, &menu::MenuData::default()))
         .on_menu_event(|app, event| menu::handle_event(app, &event))
         .invoke_handler(tauri::generate_handler![
+            desktop_integration::desktop_poll_events,
+            desktop_integration::desktop_read_file,
+            desktop_integration::desktop_pick_color,
+            desktop_integration::desktop_set_wallpaper,
+            desktop_integration::desktop_set_wallpaper_bytes,
+            desktop_integration::desktop_read_accent,
+            desktop_integration::desktop_clipboard_read,
+            desktop_integration::desktop_hotfolder_set,
             menu::set_menu_data,
             capture::capture_page,
             capture::capture_page_pdf,
@@ -107,6 +124,23 @@ fn run_gui(context: tauri::Context) {
             native_transport::native_poll_inbound,
             native_transport::native_adopt
         ])
+        // Desktop integration boot (plans/174): first-launch argv (a .lolly
+        // double-clicked before the app ran, a lolly:// link that launched us),
+        // the clipboard-lens tray, and - on Linux - the D-Bus search/automation
+        // surfaces. All additive; failures degrade to a plain window, logged.
+        .setup(|app| {
+            let handle = app.handle().clone();
+            desktop_integration::classify_argv(
+                &handle,
+                &std::env::args().skip(1).collect::<Vec<_>>(),
+            );
+            if let Err(e) = desktop_integration::setup_tray(&handle) {
+                eprintln!("[desktop] tray unavailable: {e}");
+            }
+            #[cfg(target_os = "linux")]
+            desktop_integration::dbus::serve(handle);
+            Ok(())
+        })
         .run(context)
         .expect("error while running Lolly desktop");
 }

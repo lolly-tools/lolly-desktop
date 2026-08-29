@@ -21,6 +21,10 @@
  * shared with web and needs no change, only the permission plumbing.
  */
 import type { Capability } from '@lolly-tools/core/host-v1';
+// Side effect on purpose: this override loads with the bridge on every boot,
+// which makes it the one guaranteed-early spot to install the portal-backed
+// window.EyeDropper before any colour field wires its buttons (plans/174 #4).
+import './eyedropper-shim.ts';
 import { PROVIDED_CAPABILITIES as WEB_CAPABILITIES } from '../../web/src/bridge/capabilities-provided.ts';
 
 export const PROVIDED_CAPABILITIES: readonly Capability[] = [...WEB_CAPABILITIES.filter(c => c !== 'screen'), 'filesystem', 'capture'];

@@ -46,6 +46,13 @@ finish-args:
   # Common Tauri-on-Flatpak fix: the DMABUF renderer shows a blank window on some
   # GPUs/drivers under the sandbox. Drop this once you confirm rendering is fine.
   - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
+  # The app itself owns the GNOME Shell search-provider bus name and the
+  # org.lolly.Desktop1 automation name while running (DBusActivatable stays false -
+  # the shell falls back to launching). Without these, the sandbox proxy silently
+  # refuses the name grab and both integrations go dark. Flathub review of
+  # --own-name is standard (plans/174-linux-desktop-home.md, "out of wave" notes).
+  - --own-name=tools.lolly.Desktop.SearchProvider
+  - --own-name=org.lolly.Desktop1
 
 cleanup:
   - /include
@@ -74,6 +81,18 @@ modules:
       - install -Dm644 icon-128.png /app/share/icons/hicolor/128x128/apps/tools.lolly.Desktop.png
       - install -Dm644 icon-256.png /app/share/icons/hicolor/256x256/apps/tools.lolly.Desktop.png
       - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/tools.lolly.Desktop.png
+      # 3) Freedesktop integration, single-sourced from ../linux (see its README).
+      #    mime/packages, gnome-shell/search-providers and dbus-1/services are on
+      #    Flatpak's export whitelist, so the host sees them; share/thumbnailers is
+      #    NOT exported - installed anyway for forward-compatibility, the RPM/deb is
+      #    the packaging that thumbnails on the host today. The KDE service menu is
+      #    deliberately absent here: Flatpak never exports kio/servicemenus.
+      - install -Dm644 tools.lolly.Desktop.xml /app/share/mime/packages/tools.lolly.Desktop.xml
+      - install -Dm644 tools.lolly.Desktop.search-provider.ini /app/share/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini
+      - install -Dm644 tools.lolly.Desktop.SearchProvider.service /app/share/dbus-1/services/tools.lolly.Desktop.SearchProvider.service
+      - install -Dm644 org.lolly.Desktop1.service /app/share/dbus-1/services/org.lolly.Desktop1.service
+      - install -Dm755 lolly-thumbnail /app/bin/lolly-thumbnail
+      - install -Dm644 lolly.thumbnailer /app/share/thumbnailers/lolly.thumbnailer
     sources:
       - type: file
         path: lolly.deb
@@ -91,3 +110,20 @@ modules:
         path: icon-256.png
       - type: file
         path: icon-512.png
+      # The integration files stay in ../linux so the RPM installs the identical
+      # bytes (same single-source reasoning as rpm/make-sources.sh copying this
+      # directory's .desktop). flatpak-builder resolves file paths relative to the
+      # manifest, so ../ is fine and deterministic; each lands in the build dir
+      # under its basename, which the install lines above use.
+      - type: file
+        path: ../linux/mime/tools.lolly.Desktop.xml
+      - type: file
+        path: ../linux/search/tools.lolly.Desktop.search-provider.ini
+      - type: file
+        path: ../linux/search/tools.lolly.Desktop.SearchProvider.service
+      - type: file
+        path: ../linux/search/org.lolly.Desktop1.service
+      - type: file
+        path: ../linux/thumbnailer/lolly-thumbnail
+      - type: file
+        path: ../linux/thumbnailer/lolly.thumbnailer
