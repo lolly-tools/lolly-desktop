@@ -1,7 +1,12 @@
 # Lolly - RPM packaging (openSUSE, via the Open Build Service)
 
-Builds the Tauri desktop app as an RPM for **openSUSE Tumbleweed, Leap 16 and
-Leap 15.6**, on [OBS](https://build.opensuse.org/).
+Builds the Tauri desktop app as an RPM for **openSUSE Tumbleweed and Leap 16**, on
+[OBS](https://build.opensuse.org/).
+
+Leap 15.6 was dropped as a target (2026-08-29): the dependency tree needs Rust >= 1.88
+and 15.6's default toolchain is older, so it would have needed devel:languages:rust
+pinned in and a second toolchain story to maintain. Tumbleweed ships 1.97.1 and Leap 16
+is current; that is the supported pair.
 
 | File | Role |
 |---|---|
@@ -84,8 +89,8 @@ osc addremove
 osc commit -m "lolly-desktop <version>"
 ```
 
-Enable these repositories in the project: **openSUSE_Tumbleweed**,
-**openSUSE_Leap_16.0**, **openSUSE_Leap_15.6**.
+Enable these repositories in the project: **openSUSE_Tumbleweed** and
+**openSUSE_Leap_16.0**.
 
 ### The Rust version constraint
 
@@ -120,8 +125,8 @@ What that run confirmed, rather than assumed:
 - Requires are exactly `libwebkit2gtk-4.1`, `libjavascriptcoregtk-4.1`, `libgtk-3`,
   `libsoup-3.0` and glibc.
 
-**Leap 16 and Leap 15.6 are still unbuilt.** Tumbleweed clears the Rust floor
-comfortably; 15.6 is the one to watch.
+**Leap 16 is still unbuilt.** Tumbleweed clears the Rust floor comfortably (1.97.1 vs
+the 1.88 the tree needs); Leap 16 should be checked before you rely on it.
 
 ### Do not build on tmpfs
 

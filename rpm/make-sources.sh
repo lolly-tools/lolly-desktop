@@ -173,7 +173,7 @@ Next:
   cp $out/* .
   osc addremove && osc commit -m "lolly-desktop $version"
 
-Repositories to enable in the OBS project (Tumbleweed, Leap 16, Leap 15.6). The
+Repositories to enable in the OBS project (Tumbleweed, Leap 16). The
 dependency tree needs Rust >= 1.88; if a target's default 'rust' is older, add
 devel:languages:rust as a repository path and switch the spec's BuildRequires to
 the versioned cargo1.88/rust1.88 packages.

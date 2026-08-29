@@ -35,8 +35,8 @@
 #      vendored ort-sys dist.txt, so it cannot drift from the pinned crate.
 #      It contains onnxruntime/lib/libonnxruntime.a, so this links STATICALLY
 #      and the resulting RPM has no libonnxruntime runtime dependency. That is
-#      what makes one spec work on Tumbleweed, Leap 16 and Leap 15.6 alike,
-#      none of which ship onnxruntime in the OSS repo.
+#      what makes one spec work on Tumbleweed and Leap 16 alike, neither of
+#      which ships onnxruntime in the OSS repo.
 # ---------------------------------------------------------------------------
 
 Name:           lolly-desktop
@@ -69,7 +69,7 @@ BuildRequires:  update-desktop-files
 
 # Tauri 2 on Linux renders through webkit2gtk-4.1 (GTK3 + libsoup3). Expressed as
 # pkgconfig() symbols rather than distro package names so the same spec resolves on
-# Tumbleweed, Leap 16 and Leap 15.6, whose package names for these differ.
+# Tumbleweed and Leap 16, whose package names for these differ.
 BuildRequires:  pkgconfig(webkit2gtk-4.1)
 BuildRequires:  pkgconfig(javascriptcoregtk-4.1)
 BuildRequires:  pkgconfig(gtk+-3.0)
