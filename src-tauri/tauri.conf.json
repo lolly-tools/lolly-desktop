@@ -46,6 +46,7 @@
     ],
     "linux": {
       "deb": {
+        "desktopTemplate": "../linux/deb/lolly.desktop.hbs",
         "files": {
           "/usr/share/mime/packages/tools.lolly.Desktop.xml": "../linux/mime/tools.lolly.Desktop.xml",
           "/usr/bin/lolly-thumbnail": "../linux/thumbnailer/lolly-thumbnail",
