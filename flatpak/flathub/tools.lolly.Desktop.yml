@@ -171,6 +171,35 @@ modules:
       - install -Dm644 shells/tauri-desktop/flatpak/icon-128.png /app/share/icons/hicolor/128x128/apps/tools.lolly.Desktop.png
       - install -Dm644 shells/tauri-desktop/flatpak/icon-256.png /app/share/icons/hicolor/256x256/apps/tools.lolly.Desktop.png
       - install -Dm644 shells/tauri-desktop/flatpak/icon-512.png /app/share/icons/hicolor/512x512/apps/tools.lolly.Desktop.png
+      # Freedesktop INTEGRATION, single-sourced from shells/tauri-desktop/linux/ (see
+      # its README). The RPM spec and the deb-based manifest both install these; this
+      # manifest did not, which would have made Flathub - likely the highest-volume
+      # channel - the ONLY one without double-click .lolly, file-manager thumbnails or
+      # GNOME Shell search. linux/README.md already claimed "both packagings" install
+      # them, so the docs described the intent and only this file was missing.
+      #
+      # Installed straight from the git checkout rather than staged flat beside the
+      # manifest (as the deb-based one does), so there are no extra sources to keep in
+      # step and these cannot drift from linux/.
+      #
+      # mime/packages, gnome-shell/search-providers and dbus-1/services are on
+      # Flatpak's export whitelist, so the host sees them. share/thumbnailers is NOT
+      # exported - installed anyway for forward-compatibility; the RPM/deb is what
+      # thumbnails on the host today. The KDE service menu is deliberately absent:
+      # Flatpak never exports kio/servicemenus.
+      - install -Dm644 shells/tauri-desktop/linux/mime/tools.lolly.Desktop.xml /app/share/mime/packages/tools.lolly.Desktop.xml
+      - install -Dm644 shells/tauri-desktop/linux/search/tools.lolly.Desktop.search-provider.ini /app/share/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini
+      - install -Dm644 shells/tauri-desktop/linux/search/tools.lolly.Desktop.SearchProvider.service /app/share/dbus-1/services/tools.lolly.Desktop.SearchProvider.service
+      - install -Dm644 shells/tauri-desktop/linux/search/org.lolly.Desktop1.service /app/share/dbus-1/services/org.lolly.Desktop1.service
+      - install -Dm755 shells/tauri-desktop/linux/thumbnailer/lolly-thumbnail /app/bin/lolly-thumbnail
+      - install -Dm644 shells/tauri-desktop/linux/thumbnailer/lolly.thumbnailer /app/share/thumbnailers/lolly.thumbnailer
+      # Filetype icon for application/vnd.lolly+zip, so a .lolly has a face in Files.
+      - install -Dm644 shells/tauri-desktop/linux/icons/32x32/application-vnd.lolly+zip.png /app/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 shells/tauri-desktop/linux/icons/48x48/application-vnd.lolly+zip.png /app/share/icons/hicolor/48x48/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 shells/tauri-desktop/linux/icons/64x64/application-vnd.lolly+zip.png /app/share/icons/hicolor/64x64/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 shells/tauri-desktop/linux/icons/128x128/application-vnd.lolly+zip.png /app/share/icons/hicolor/128x128/mimetypes/application-vnd.lolly+zip.png
+      - install -Dm644 shells/tauri-desktop/linux/icons/256x256/application-vnd.lolly+zip.png /app/share/icons/hicolor/256x256/mimetypes/application-vnd.lolly+zip.png
+
       # Flathub requires the licence be installed under the app id.
       - install -Dm644 LICENSE /app/share/licenses/tools.lolly.Desktop/LICENSE
 
@@ -179,7 +208,7 @@ modules:
       # brands/lolly-start pack, and the packages/* workspaces.
       - type: git
         url: https://github.com/lolly-tools/lolly.git
-        commit: 99ee7b0343175ae1e8fe682bc3584ad1b63ffb81
+        commit: b30b47dc6cb684a31fc2c5a32931fb2a9bc432c5
         disable-submodules: true
 
       # The submodules this build needs, pinned to what the umbrella commit above
@@ -188,11 +217,11 @@ modules:
       # though the desktop app does not run them.
       - type: git
         url: https://github.com/lolly-tools/lolly-web.git
-        commit: b8a08aee9d9e5c9adf851ad82daa7f97c974f2a2
+        commit: c79dd45f10accf7712d164df7d56aeef2b8a65af
         dest: shells/web
       - type: git
         url: https://github.com/lolly-tools/lolly-cli.git
-        commit: b1a0c33c4010d10d76f8d16884cff7a14a5afa74
+        commit: 880feaa2cc23cbe22a1fa44f2e2ef8e00a669fe1
         dest: shells/cli
       - type: git
         url: https://github.com/lolly-tools/lolly-tui.git
@@ -204,23 +233,23 @@ modules:
         dest: services/ca
       - type: git
         url: https://github.com/lolly-tools/lolly-mcp-server.git
-        commit: 6005abce3bdb172a7ed489f0c64a461fd3636926
+        commit: 1ba78efa15d00b244601759ee41e34c218fa27fb
         dest: services/mcp
       # Not workspaces, but the build reads them: community/ is the public tool set
       # that scripts/use-profile.ts builds the tools/ view from, and docs/ is what
       # build:info turns into the /info pages the in-app #/docs reader fetches.
       - type: git
         url: https://github.com/lolly-tools/lolly-tools.git
-        commit: 39fc6cc125d175dc163b4d70bfce422b1e17b9af
+        commit: c6b266e82d8bbac8d3ced56783157ca5aecb21bc
         dest: community
       - type: git
         url: https://github.com/lolly-tools/lolly-docs.git
-        commit: 7afe789f774a83e908c720e33552a520813fd073
+        commit: 91f450485f91526dd91b5f89e709fe0e003aef86
         dest: docs
       # The shell being built.
       - type: git
         url: https://github.com/lolly-tools/lolly-desktop.git
-        commit: 9c2561367b7d588b9701791fe8a1104185c6383e
+        commit: c939965d1e7d393582566640e8475e9d853e37fd
         dest: shells/tauri-desktop
 
       # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to
