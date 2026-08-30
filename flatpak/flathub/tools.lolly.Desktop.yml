@@ -208,7 +208,7 @@ modules:
       # brands/lolly-start pack, and the packages/* workspaces.
       - type: git
         url: https://github.com/lolly-tools/lolly.git
-        commit: b30b47dc6cb684a31fc2c5a32931fb2a9bc432c5
+        commit: 65eb21ccf0bb752c3dca167b423499bf862ec2e5
         disable-submodules: true
 
       # The submodules this build needs, pinned to what the umbrella commit above
@@ -249,7 +249,7 @@ modules:
       # The shell being built.
       - type: git
         url: https://github.com/lolly-tools/lolly-desktop.git
-        commit: c939965d1e7d393582566640e8475e9d853e37fd
+        commit: 407690c7c77131b4a80f0d8d7733129ef24ea855
         dest: shells/tauri-desktop
 
       # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to

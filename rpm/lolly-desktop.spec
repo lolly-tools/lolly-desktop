@@ -128,6 +128,13 @@ tar -xzf %{SOURCE3}
 tar -xzf %{SOURCE4}
 %endif
 test -f onnxruntime/lib/libonnxruntime.a
+# Fail in %prep, not 600 crates later in %install: the spec installs the
+# freedesktop integration from linux/, which make-sources.sh must stage.
+test -d linux/mime -a -d linux/search -a -d linux/thumbnailer || {
+  echo "ERROR: linux/ integration files missing from the source tarball." >&2
+  echo "       rpm/make-sources.sh must stage shells/tauri-desktop/linux/." >&2
+  exit 1
+}
 
 %build
 # Absolute, because the build runs from src-tauri/ a few lines down.
@@ -233,6 +240,17 @@ install -Dm0644 linux/search/org.lolly.Desktop1.service \
 # shipped - installing to both would double the menu on transitional systems.
 install -Dm0644 linux/kde/lolly-utilities.desktop \
     %{buildroot}%{_datadir}/kio/servicemenus/lolly-utilities.desktop
+
+# The application/vnd.lolly+zip FILETYPE icon, so a .lolly has a face in Files and
+# Dolphin. Note the sizes differ from the app-icon loop above (48 here, no 512) -
+# these follow what linux/icons/ actually ships, and %files lists exactly these five.
+# They were declared in %files without ever being installed, so the build failed at
+# the very end with "File not found: .../mimetypes/application-vnd.lolly+zip.png"
+# after the whole compile had run.
+for size in 32 48 64 128 256; do
+    install -Dm0644 "linux/icons/${size}x${size}/application-vnd.lolly+zip.png" \
+        "%{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/mimetypes/application-vnd.lolly+zip.png"
+done
 
 %fdupes %{buildroot}%{_datadir}/icons
 

@@ -143,6 +143,13 @@ cp -a "$desktop/dist" "$stage/dist"
 cp -a "$desktop/LICENSE" "$stage/LICENSE"
 cp -a "$desktop/README.md" "$stage/README.md"
 
+# linux/ - the freedesktop INTEGRATION layer (MIME type, thumbnailer, GNOME Shell
+# search provider, D-Bus activation, KDE service menu). The spec's %install reads
+# these from linux/ directly, so omitting them fails the build at %install with
+# "install: cannot stat 'linux/mime/tools.lolly.Desktop.xml'" - long after the
+# ~600-crate compile has finished, which is an expensive way to find out.
+cp -a "$desktop/linux" "$stage/linux"
+
 # Freedesktop metadata. Single source of truth is flatpak/ - the .desktop, the
 # metainfo and the icons are app metadata, not Flatpak-specific, and both packagings
 # install the identical files. Keep them there so the two cannot drift.
