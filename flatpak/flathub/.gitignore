@@ -3,3 +3,8 @@
 build-dir/
 repo/
 *.flatpak
+
+# Flathub shared-modules: a git submodule in the Flathub repo, cloned locally here.
+# See README.md - clone it before building:
+#   git clone https://github.com/flathub/shared-modules.git
+shared-modules/

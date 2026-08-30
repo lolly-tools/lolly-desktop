@@ -16,14 +16,14 @@ id: tools.lolly.Desktop
 
 # Tauri v2 renders through webkit2gtk-4.1 (GTK3), which the GNOME runtime provides.
 # Keep runtime-version in lockstep with the flatpak-builder container image tag in the
-# CI workflow (gnome-49 -> '49'). Bump both together.
+# CI workflow (gnome-50 -> '50'). Bump both together.
 #
-# Was '47' until 2026-08-28. That was never buildable by anyone who did not already
+# Was '49' until 2026-08-30, and '47' before that. That was never buildable by anyone who did not already
 # have the runtime cached: GNOME 47 is EOL and Flathub no longer publishes
 # org.gnome.Platform//47 at all, so `flatpak-builder` could not resolve it. Flathub
 # currently offers 49 and 50; 49 is the more settled of the two.
 runtime: org.gnome.Platform
-runtime-version: '49'
+runtime-version: '50'
 sdk: org.gnome.Sdk
 
 # The in-sandbox executable (Cargo package name `lolly-desktop`; no mainBinaryName

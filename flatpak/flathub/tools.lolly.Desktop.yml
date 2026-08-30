@@ -47,7 +47,7 @@ id: tools.lolly.Desktop
 # and the Flathub docs say that exception "is never granted". Renaming also moves the
 # app data directory, which is why it had to happen before 1.0.0 rather than after.
 runtime: org.gnome.Platform
-runtime-version: '49'
+runtime-version: '50'
 sdk: org.gnome.Sdk
 
 # rust-stable 1.98 and node24 24.20.0 on the 25.08 branch that GNOME 49 is built on.
@@ -77,6 +77,22 @@ finish-args:
   - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
 
 modules:
+  # The tray needs libayatana-appindicator, which NO org.gnome.Platform ships
+  # (verified absent from both 49 and 50). Without it the app BUILT AND LINTED
+  # CLEANLY and then panicked at startup from libappindicator-sys's lazy dlopen:
+  #   Failed to load ayatana-appindicator3 or appindicator3 dynamic library
+  #
+  # Use Flathub's own shared-modules rather than hand-rolling the stack. It pulls
+  # intltool -> libdbusmenu -> ayatana-ido -> libayatana-indicator ->
+  # libayatana-appindicator, and carries the fixes each of those needs against a
+  # modern toolchain - including a patch for libdbusmenu's
+  # `conditional "HAVE_VALGRIND" was never defined`, which is precisely where a
+  # hand-written chain got stuck here. Maintained upstream, so it keeps working.
+  #
+  # shared-modules is a git submodule of this directory (standard Flathub practice):
+  #   git submodule add https://github.com/flathub/shared-modules.git
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
   - name: lolly
     buildsystem: simple
 
@@ -215,7 +231,7 @@ modules:
       # brands/lolly-start pack, and the packages/* workspaces.
       - type: git
         url: https://github.com/lolly-tools/lolly.git
-        commit: fe269e7c869cf0e61dd21d7dab2d4b53c4d22c10
+        commit: dec37680bf1baab627e023e40144fa9c356147da
         disable-submodules: true
 
       # The submodules this build needs, pinned to what the umbrella commit above
@@ -256,7 +272,7 @@ modules:
       # The shell being built.
       - type: git
         url: https://github.com/lolly-tools/lolly-desktop.git
-        commit: 6b00fbaeb56f5059fe4fdd13de21841693cd84d0
+        commit: e93cb6d375a76db4be85ba3b24ed4588365d4969
         dest: shells/tauri-desktop
 
       # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to
