@@ -85,6 +85,16 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
+    <release version="1.0.2" date="2026-08-30">
+      <description>
+        <p>Packaging fix, no change to what the app renders or exports:</p>
+        <ul>
+          <li>The Flatpak build now carries the same desktop integration the RPM and
+              Debian packages already shipped - the .lolly file association, the
+              GNOME Files thumbnailer and the GNOME Shell search provider.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.1" date="2026-08-30">
       <description>
         <p>At home on the Linux desktop:</p>

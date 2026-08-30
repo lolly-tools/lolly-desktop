@@ -40,7 +40,7 @@
 # ---------------------------------------------------------------------------
 
 Name:           lolly-desktop
-Version:        1.0.1
+Version:        1.0.2
 Release:        0
 Summary:        Generate on-brand creative assets from simple inputs
 License:        MPL-2.0
@@ -144,7 +144,7 @@ export CARGO_HOME="$(pwd)/.cargo-home"
 cd src-tauri
 # MEMORY. The final rustc invocation links lolly-desktop with the ENTIRE frontend
 # embedded by generate_context!() (~175 MB of assets) plus a statically linked ONNX
-# Runtime, in one process with a large peak RSS. %limit_build is openSUSE's idiom for
+# Runtime, in one process with a large peak RSS. %%limit_build is openSUSE's idiom for
 # bounding that: it caps parallel jobs by available memory, so a constrained OBS worker
 # throttles instead of dying. Precautionary - a build worker with little RAM per core is
 # the case it protects.
@@ -154,13 +154,27 @@ cd src-tauri
 # /tmp - so several GB of "disk" were actually resident memory. Build on real disk;
 # the same mistake also reports itself as "Disk quota exceeded (os error 122)" once
 # tmpfs hits its ceiling. Neither message mentions tmpfs.
-# Guarded on the MACRO, not the distro. %limit_build ships with the OBS build macros,
-# not base rpm-build, so it is undefined even on Tumbleweed in a plain rpmbuild - and an
-# undefined macro is emitted verbatim into the shell script, where `%limit_build -m 3000`
-# becomes a command not found and kills %build before a single crate compiles. An
-# earlier `%if 0%{?suse_version}` guard did not help, because the distro is openSUSE
-# either way; existence of the macro is the actual question.
+# Guarded on BOTH the distro and the macro, because each alone is wrong:
+#
+#   - distro alone (%if 0%{?suse_version}) is not enough: %%limit_build ships with the
+#     OBS build macros, not base rpm-build, so it is undefined on Tumbleweed under a
+#     plain rpmbuild - and an undefined macro is emitted verbatim into the shell
+#     script, where `%%limit_build -m 3000` is a command-not-found that kills %build
+#     before a single crate compiles.
+#
+#   - macro alone (%%{?limit_build:...}) is not enough either: TWO DIFFERENT MACROS
+#     SHARE THE NAME. openSUSE's is a statement that sets _smp_mflags. Fedora's, from
+#     redhat-rpm-config, is an *expression* returning a -jN flag for use inside
+#     %make_build, and invoking it this way makes its Lua do tonumber(nil) and abort
+#     the parse with "attempt to perform arithmetic on a nil value". That breaks the
+#     plain-rpmbuild smoke test on another distro that README.md documents.
+# NB: the %%limit_build spellings in the comments above are escaped on purpose -
+# rpm expands macros INSIDE COMMENTS, and a bare `%%limit_build -m 3000` in prose
+# invokes Fedora's macro with a trailing backtick in its argument, so tonumber()
+# returns nil and the whole spec fails to parse. Do not unescape them.
+%if 0%{?suse_version}
 %{?limit_build:%limit_build -m 3000}
+%endif
 
 # --features tauri/custom-protocol is NOT optional. It is what the Tauri CLI adds for
 # you, and tauri's own is_dev() is literally `!cfg!(feature = "custom-protocol")`
@@ -169,7 +183,7 @@ cd src-tauri
 # would start, show a window, and fail with "Could not connect to localhost: Connection
 # refused". Nothing in the build log warns about it - the tell is the binary coming out
 # roughly a third of its proper size, which %check below now guards.
-# %{?_smp_mflags} is what makes %limit_build above actually DO something: the macro
+# %{?_smp_mflags} is what makes %%limit_build above actually DO something: the macro
 # only sets _smp_mflags, so without passing it here cargo would still fan out to every
 # core and the memory cap would be inert. Cargo accepts the same -jN spelling make does.
 cargo build \
@@ -301,6 +315,11 @@ fi
 /usr/share/icons/hicolor/256x256/mimetypes/application-vnd.lolly+zip.png
 
 %changelog
+* Sun Aug 30 2026 Andy Fitzsimon <andyfitz@gmail.com> - 1.0.2-0
+- Flatpak parity: the from-source Flathub manifest now installs the same
+  freedesktop integration this spec already did (MIME type, thumbnailer, GNOME
+  Shell search provider, D-Bus activation). No change to the RPM's own payload.
+
 * Sun Aug 30 2026 Andy Fitzsimon <andyfitz@gmail.com> - 1.0.1-0
 - Linux desktop integration (plans/174): .lolly file association + thumbnailer,
   lolly:// deep links, XDG-portal colour picker and wallpaper, GNOME Shell and
