@@ -101,7 +101,14 @@ modules:
         # The frontend reads this for its model download base; the models themselves
         # are NOT bundled (vite.config.js prunes dist/models - embedding ~1.8 GB tips
         # the crate's rlib past the 32-bit ar archive-offset limit).
-        VITE_MODELS_BASE: https://lolly.tools
+        #
+        # NOTE: this value does NOT decide the model host. package.json's
+        # build:frontend runs `VITE_MODELS_BASE=... vite build` with an inline shell
+        # assignment, which overrides anything inherited from here. The real setting
+        # lives there (and vite.config.js carries the same value as its default).
+        # Kept in step with them so the two never appear to disagree, but change
+        # package.json if you want to actually move the host.
+        VITE_MODELS_BASE: https://lolli.li
 
     build-commands:
       # 1) Workspace deps.
@@ -208,7 +215,7 @@ modules:
       # brands/lolly-start pack, and the packages/* workspaces.
       - type: git
         url: https://github.com/lolly-tools/lolly.git
-        commit: 65eb21ccf0bb752c3dca167b423499bf862ec2e5
+        commit: fe269e7c869cf0e61dd21d7dab2d4b53c4d22c10
         disable-submodules: true
 
       # The submodules this build needs, pinned to what the umbrella commit above
@@ -249,7 +256,7 @@ modules:
       # The shell being built.
       - type: git
         url: https://github.com/lolly-tools/lolly-desktop.git
-        commit: 407690c7c77131b4a80f0d8d7733129ef24ea855
+        commit: 6b00fbaeb56f5059fe4fdd13de21841693cd84d0
         dest: shells/tauri-desktop
 
       # ONNX Runtime, byte-identical to what ort-sys would have fetched. Extracts to
