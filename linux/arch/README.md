@@ -54,3 +54,5 @@ git clone https://aur.archlinux.org/lolly-desktop-bin.git && cd lolly-desktop-bi
    push.
 5. Mirror any change back into this directory - this repo stays the source of
    truth, the AUR clone is a publish target.
+
+Verified 2026-08-30: makepkg built 1.0.1-1 in a clean Arch container against the live lolli.li deb (sha256 pass, 27 integration files in the package, namcap warnings benign). The recipe is AUR-publishable.
