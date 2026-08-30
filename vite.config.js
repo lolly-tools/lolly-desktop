@@ -76,7 +76,7 @@ function overrideBridgeModules(map) {
 // MODELS_BASE so it applies ONLY to the desktop frontend - the web deploy keeps
 // the empty default and self-serves /models/. An override may be passed in the
 // environment (VITE_MODELS_BASE).
-const MODELS_HOST = process.env.VITE_MODELS_BASE ?? 'https://lolly.tools';
+const MODELS_HOST = process.env.VITE_MODELS_BASE ?? 'https://lolli.li';
 
 
 export default defineConfig({
