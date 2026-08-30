@@ -85,6 +85,20 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
+    <release version="1.0.3" date="2026-08-30">
+      <description>
+        <p>Fixes a crash on startup. No change to what the app renders or exports:</p>
+        <ul>
+          <li>The system tray loads its indicator library lazily, so nothing in the
+              build could catch that the Flatpak did not ship it. The app started and
+              died immediately. It is now bundled.</li>
+          <li>The RPM never declared that library as a dependency, so it could install
+              on a system without it and hit the same crash. It does now.</li>
+          <li>If the library is ever missing anyway, the tray is skipped with a warning
+              instead of aborting startup.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-08-30">
       <description>
         <p>Packaging fix, no change to what the app renders or exports:</p>

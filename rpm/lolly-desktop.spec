@@ -40,7 +40,7 @@
 # ---------------------------------------------------------------------------
 
 Name:           lolly-desktop
-Version:        1.0.2
+Version:        1.0.3
 Release:        0
 Summary:        Generate on-brand creative assets from simple inputs
 License:        MPL-2.0
@@ -82,6 +82,13 @@ BuildRequires:  pkgconfig(openssl)
 BuildRequires:  pkgconfig(ayatana-appindicator3-0.1)
 
 Requires:       hicolor-icon-theme
+# The tray dlopens libayatana-appindicator3 LAZILY, so rpm's automatic dependency
+# finder never sees it - the ELF carries no DT_NEEDED for it. Without this line the
+# package installs happily on a system that lacks the library and the app then dies
+# on launch, which is exactly how it shipped in 1.0.2. Depend on the soname rather
+# than a package name so it resolves on Tumbleweed and Leap alike, whatever either
+# calls the containing package.
+Requires:       libayatana-appindicator3.so.1()(64bit)
 # The url-shot tool drives a headless Chrome over the DevTools Protocol
 # (src-tauri/src/capture.rs). Everything else works without it, so this is a
 # Recommends, not a Requires - the app starts and renders fine with no browser.

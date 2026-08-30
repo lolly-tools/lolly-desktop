@@ -60,6 +60,19 @@ cleanup:
   - /share/man
 
 modules:
+  # The tray dlopens libayatana-appindicator3 lazily, and NO org.gnome.Platform ships
+  # it - so without this the .deb unpacks fine, the bundle lints and installs, and the
+  # app then dies on launch. It shipped that way: every Flatpak built from this manifest
+  # since c939965d was dead on arrival, because the artifact was verified by inspecting
+  # installed files rather than by running it.
+  #
+  # Flathub's shared-modules maintains the whole stack (intltool -> libdbusmenu ->
+  # ayatana-ido -> libayatana-indicator -> libayatana-appindicator) with the patches it
+  # needs against a modern toolchain. It is a submodule of ../ (one real copy;
+  # flathub/shared-modules is a symlink to it), so `git submodule update --init` is
+  # enough - and CI's recursive checkout already does that.
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
   - name: lolly
     buildsystem: simple
     build-commands:
