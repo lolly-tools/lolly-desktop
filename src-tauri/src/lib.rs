@@ -134,8 +134,22 @@ fn run_gui(context: tauri::Context) {
                 &handle,
                 &std::env::args().skip(1).collect::<Vec<_>>(),
             );
-            if let Err(e) = desktop_integration::setup_tray(&handle) {
-                eprintln!("[desktop] tray unavailable: {e}");
+            // catch_unwind, not just `if let Err`: libappindicator-sys PANICS from a
+            // lazy dlopen when libayatana-appindicator3 is absent, so it never
+            // returns Err and the graceful path below could not fire. That is not
+            // hypothetical - no org.gnome.Platform runtime ships the library, so a
+            // Flatpak without it as a bundled module died on this line at startup.
+            // The Flatpak manifest now builds it, but a tray is a nicety and must
+            // never be the reason the app fails to open.
+            let tray = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                desktop_integration::setup_tray(&handle)
+            }));
+            match tray {
+                Ok(Err(e)) => eprintln!("[desktop] tray unavailable: {e}"),
+                Err(_) => eprintln!(
+                    "[desktop] tray unavailable: the appindicator library could not be loaded"
+                ),
+                Ok(Ok(())) => {}
             }
             #[cfg(target_os = "linux")]
             desktop_integration::dbus::serve(handle);
