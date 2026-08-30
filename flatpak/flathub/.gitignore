@@ -4,7 +4,6 @@ build-dir/
 repo/
 *.flatpak
 
-# Flathub shared-modules: a git submodule in the Flathub repo, cloned locally here.
-# See README.md - clone it before building:
-#   git clone https://github.com/flathub/shared-modules.git
-shared-modules/
+# shared-modules is a SYMLINK to ../shared-modules (the real submodule), committed so
+# both manifests can reference `shared-modules/...` at their own level: this one has to
+# stay copyable verbatim into the Flathub repo, where the path is a submodule.

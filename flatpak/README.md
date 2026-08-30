@@ -25,8 +25,10 @@ tauri build --bundles deb  ──►  Lolly_x.y.z_amd64.deb  ──►  flatpak-
 | `tools.lolly.Desktop.metainfo.xml` | AppStream metadata (id must match the app id) |
 | `icon-{32,128,256}.png` | hicolor icons, copied from `../src-tauri/icons/` |
 | `lolly.deb` | **not committed** - the built package, staged here before building |
+| `shared-modules/` | submodule - Flathub's shared module definitions; supplies libayatana-appindicator |
+| `flathub/` | the from-source manifest prepared for a Flathub submission (see the note below) |
 
-The app id `tools.lolly.Desktop`, the runtime (`org.gnome.Platform//47`, which provides
+The app id `tools.lolly.Desktop`, the runtime (`org.gnome.Platform//50`, which provides
 the `webkit2gtk-4.1` Tauri needs), and the binary name (`lolly-desktop`, the Cargo
 package name) all have to stay in agreement. If you set `mainBinaryName` in
 `tauri.conf.json`, update `command:` and the `install` path in the manifest to match.
@@ -46,7 +48,7 @@ cp src-tauri/target/release/bundle/deb/*.deb flatpak/lolly.deb
 
 # 3) build + install the Flatpak
 cd flatpak
-flatpak install -y flathub org.gnome.Platform//47 org.gnome.Sdk//47
+flatpak install -y flathub org.gnome.Platform//50 org.gnome.Sdk//50
 flatpak-builder --user --install --force-clean build-dir tools.lolly.Desktop.yml
 
 # 4) run it
@@ -56,6 +58,30 @@ flatpak run tools.lolly.Desktop
 flatpak-builder --user --force-clean --repo=repo build-dir tools.lolly.Desktop.yml
 flatpak build-bundle repo Lolly.flatpak tools.lolly.Desktop
 ```
+
+## Run it before you call it built
+
+The runtime does **not** ship `libayatana-appindicator3`, which the tray dlopens
+lazily. Every bundle built before 2026-08-30 unpacked, linted, installed and then
+died on launch, and none of the automated signals noticed - they were all checking
+that files existed. `shared-modules/libayatana-appindicator` now builds it into
+`/app`, and the `git submodule update --init` that provides it is part of a normal
+recursive checkout.
+
+The general lesson is worth keeping: a Flatpak that builds is not a Flatpak that
+runs. `flatpak run tools.lolly.Desktop` and confirm a WebKit process settles above
+~300 MB resident - a blank window sits near 40 MB.
+
+## Flathub
+
+Not a distribution channel for this app. Flathub's generative AI policy bars
+applications containing AI-assisted code as well as AI-opened submissions, and
+`tools.lolly.Desktop` would additionally fail their rule against app IDs ending in
+generic terms like `.desktop`. `flathub/` is kept because it is a working
+from-source, fully offline manifest, which is useful in its own right. Note it drops
+the two `--own-name` finish-args to satisfy their linter, which disables the GNOME
+Shell search provider and D-Bus activation - the bundle built from the manifest in
+this directory keeps both.
 
 ## First-run things to verify
 
