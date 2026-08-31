@@ -40,8 +40,8 @@
 # ---------------------------------------------------------------------------
 
 Name:           lolly-desktop
-Version:        1.0.3
-Release:        0
+Version:        1.0.5
+Release:        0%{?dist}
 Summary:        Generate on-brand creative assets from simple inputs
 License:        MPL-2.0
 Group:          Productivity/Graphics/Other

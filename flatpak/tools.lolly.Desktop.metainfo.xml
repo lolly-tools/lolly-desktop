@@ -85,6 +85,27 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
+    <release version="1.0.5" date="2026-08-31">
+      <description>
+        <p>Version alignment across every Lolly shell - desktop, mobile and the
+           control plane now share one number - plus two fixes carried in from
+           the web shell:</p>
+        <ul>
+          <li>In a narrow export panel the Copy, Save and Share actions collapse
+              cleanly to their icons again, keeping their meaning through tooltips
+              and screen-reader labels. They previously tried to stack as
+              full-width labelled rows, which only half-applied and overflowed the
+              sheet.</li>
+          <li>Vector export is more faithful: text stroke and paint-order are
+              honoured, and transformed elements decompose correctly, so SVG and
+              PDF output better matches what is on screen.</li>
+        </ul>
+        <p>This build also carries the 1.0.3 fixes forward - the bundled tray
+           indicator library and the guard that skips the tray rather than
+           aborting startup, openSUSE Leap 16 packages, and a native aarch64
+           Debian package.</p>
+      </description>
+    </release>
     <release version="1.0.3" date="2026-08-30">
       <description>
         <p>Fixes a crash on startup. No change to what the app renders or exports:</p>
