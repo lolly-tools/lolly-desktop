@@ -119,7 +119,10 @@ def cmd_sums(c, args):
         sums[k] = h.hexdigest()
         print(f"  hashed {k}", file=sys.stderr)
 
-    aliases = sorted(k for k in sums if k.startswith("lolly-latest."))
+    # Aliases are both "lolly-latest.<ext>" and the per-variant
+    # "lolly-latest-<variant>.<ext>" (arm64, leap16) - matching only the dot
+    # form files those under "Versioned", which reads as if they were pinned.
+    aliases = sorted(k for k in sums if k.startswith(("lolly-latest.", "lolly-latest-")))
     out = ["# Lolly release checksums — verify with: sha256sum -c SHA256SUMS.txt",
            "# Stable aliases (always the newest build)"]
     out += [f"{sums[k]}  {k}" for k in aliases]
