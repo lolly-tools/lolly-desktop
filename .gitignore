@@ -8,3 +8,7 @@ src-tauri/gen/
 # `cargo vendor` output, produced by rpm/make-sources.sh for the offline OBS build.
 # ~900 MB of third-party crate sources - it ships as vendor.tar.zst, never in git.
 src-tauri/vendor/
+
+# Python bytecode from release/lolli.py (created when it is imported rather
+# than run as a script - e.g. to reuse its S3 client from another snippet).
+__pycache__/
