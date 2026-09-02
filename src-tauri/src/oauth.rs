@@ -17,6 +17,13 @@
 //! single-shot and removed from the table the moment `oauth_wait` claims it;
 //! an abandoned listen is reclaimed by the next `oauth_listen` call's sweep.
 //! Loopback-only by construction: the bind is 127.0.0.1, never 0.0.0.0.
+//!
+//! `oauth_listen` takes an OPTIONAL list of preferred ports (plans/129 WP4b).
+//! An ephemeral port is the RFC 8252 default and what most providers accept,
+//! but a provider that matches the redirect URI exactly with no port wildcard
+//! (LinkedIn) can only be given ports its registration already names - so the
+//! list is tried in order and, if every one is taken, the call FAILS naming
+//! them rather than falling back to a random port the provider would refuse.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -38,8 +45,19 @@ const RETURN_PAGE: &str = "<!doctype html><meta charset=\"utf-8\">\
 <p>\u{2705} Signed in \u{2014} you can close this tab and return to Lolly.</p>";
 
 #[tauri::command]
-pub fn oauth_listen(state: State<OauthListeners>) -> Result<u16, String> {
-    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| format!("bind failed: {e}"))?;
+pub fn oauth_listen(ports: Option<Vec<u16>>, state: State<OauthListeners>) -> Result<u16, String> {
+    let mut map = state.0.lock().map_err(|_| "listener table poisoned")?;
+    // Reclaim abandoned listens (a cancelled sign-in never calls oauth_wait):
+    // one interactive flow at a time is the honest model, so a fresh listen
+    // sweeps the table rather than leaking sockets across attempts. It happens
+    // BEFORE the bind, which matters once the ports are fixed: a leftover
+    // socket of our own would otherwise read as "port in use" and burn through
+    // the short registered list.
+    map.clear();
+    let listener = match ports.as_deref() {
+        Some(preferred) if !preferred.is_empty() => bind_preferred(preferred)?,
+        _ => TcpListener::bind("127.0.0.1:0").map_err(|e| format!("bind failed: {e}"))?,
+    };
     let port = listener
         .local_addr()
         .map_err(|e| format!("no local addr: {e}"))?
@@ -47,13 +65,25 @@ pub fn oauth_listen(state: State<OauthListeners>) -> Result<u16, String> {
     listener
         .set_nonblocking(true)
         .map_err(|e| format!("nonblocking failed: {e}"))?;
-    let mut map = state.0.lock().map_err(|_| "listener table poisoned")?;
-    // Reclaim abandoned listens (a cancelled sign-in never calls oauth_wait):
-    // one interactive flow at a time is the honest model, so a fresh listen
-    // sweeps the table rather than leaking sockets across attempts.
-    map.clear();
     map.insert(port, listener);
     Ok(port)
+}
+
+/// First free port from the caller's list. No silent fallback: a port the
+/// provider's registration does not name is worse than an honest failure,
+/// because the redirect would be refused after the user has already signed in.
+fn bind_preferred(ports: &[u16]) -> Result<TcpListener, String> {
+    for &port in ports {
+        if let Ok(listener) = TcpListener::bind(("127.0.0.1", port)) {
+            return Ok(listener);
+        }
+    }
+    let names = ports
+        .iter()
+        .map(u16::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!("ports {names} are all in use"))
 }
 
 #[tauri::command]
