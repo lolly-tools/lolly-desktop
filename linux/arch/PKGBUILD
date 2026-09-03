@@ -27,7 +27,7 @@
 # file needed.
 
 pkgname=lolly-desktop-bin
-pkgver=1.0.5
+pkgver=1.0.6
 pkgrel=1
 pkgdesc="Constraint-first studio for on-brand creative assets (official binary release)"
 arch=('x86_64')

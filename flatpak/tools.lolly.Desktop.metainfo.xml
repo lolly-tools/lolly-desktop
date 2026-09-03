@@ -85,6 +85,31 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
+    <release version="1.0.6" date="2026-09-03">
+      <description>
+        <p>A formal release across every platform. The design-system studio now
+           starts with one colour and grows as you add to it; what shipped is tagged
+           Starter and what you chose is tinted; the first colour is a picker; a
+           Google Font previews on the first press; swatches can be selected in bulk
+           by dragging across the palette.</p>
+        <ul>
+          <li>Design tool: one motion model, a top bar, a navigator and an inspector;
+              text animation with native PowerPoint export; tilt, Choreograph
+              showcases and camera moves; sub-slide stacks and transcript-driven
+              editing.</li>
+          <li>Sequence audio: pan, crossfades, signal-following ducking, a true-peak
+              limiter, pitch-preserving time-stretch, a three-band EQ, loudness
+              normalisation and an effect rack with on-device voice cleanup.</li>
+          <li>Narrated slides: speaker notes become a voice track, captions travel in
+              the file, PPTX carries real slide audio and a deck exports as a SCORM
+              package.</li>
+          <li>lolly:// deep links open a tool with its inputs filled from another
+              app, a shortcut or a QR code.</li>
+          <li>The service worker heals cache entries that left on-device models stuck
+              at 100% for returning users.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.5" date="2026-08-31">
       <description>
         <p>Version alignment across every Lolly shell - desktop, mobile and the
