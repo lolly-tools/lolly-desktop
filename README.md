@@ -94,6 +94,28 @@ Two boot-path facts this depends on, both **load-bearing**:
 
 This is the subset that ships in the app: `run`, plus `--help`/`--version`. The full terminal experience - `list`, `describe`, `batch`, `preflight`, `validate`, every format tier, C2PA/signing - remains the Node CLI (`shells/cli`, `npm run cli`).
 
+## Deep links: `lolly://`
+
+The desktop app owns the `lolly://` URL scheme (plans/174): `lolly://<route>` is `https://lolly.tools/<route>` with the site name taken for granted, so a launcher, a Shortcut, a `.desktop` Action, a GNOME Shell or KRunner result or a terminal (`open` / `xdg-open` / `start`) can open a tool with its inputs filled. The grammar is documented in `docs/url-mode.md` ("The `lolly://` scheme"); the web-side mapper is `shells/web/src/lib/deep-link.ts`, and it refuses anything that is not a parsing tool address or a word from the app's frozen route vocabulary.
+
+Two halves, per platform:
+
+| | Registration (who tells the OS) | Delivery (how the URL reaches the queue) |
+|---|---|---|
+| macOS | The bundler writes `CFBundleURLTypes` into the `.app`'s Info.plist from `tauri.conf.json` > `plugins.deep-link.desktop.schemes`. Only an installed bundle is registered; `tauri dev` on a Mac cannot receive the scheme. | Apple Events, never argv: Tauri surfaces them as `RunEvent::Opened { urls }`, handled in `lib.rs`'s run callback by `desktop_integration::classify_opened` (a `.lolly` double-clicked in Finder arrives the same way as a `file://` URL). |
+| Windows | The NSIS/MSI installers write `HKCU\Software\Classes\lolly` (`URL Protocol` + `shell\open\command`) from the same config block and remove it on uninstall. A debug build registers itself at launch (`register_all`). | argv: a fresh process is started with the URL, and `tauri-plugin-single-instance` forwards that argv to the running one; both go through `classify_argv`. |
+| Linux | `MimeType=…;x-scheme-handler/lolly;` in the `.desktop` entry - the deb's `linux/deb/lolly.desktop.hbs`, the curated `flatpak/tools.lolly.Desktop.desktop` (also the rpm's), and the entry the bundler generates. A debug build registers itself at launch. | argv, as on Windows. |
+
+Every path ends in one place: the `DesktopEvents` queue (`desktop_integration.rs`) that the web shell drains every 1200 ms (`shells/web/src/lib/linux-desktop-boot.ts`). The `tauri-plugin-deep-link` crate is what makes the config block real (and what registers a dev build); its own events are not used for delivery, so a URL is never routed twice. `cli.rs` classifies a leading `lolly://` argument as GUI, never as a headless render - `Lolly lolly://tool/qr-code` opens the window on that tool.
+
+To try it on an installed build:
+
+```bash
+open "lolly://t/qr-code?url=https://suse.com"          # macOS
+xdg-open "lolly://tool/strip-data"                       # Linux
+start "lolly://lab"                                      # Windows
+```
+
 ## Run it
 
 ```bash

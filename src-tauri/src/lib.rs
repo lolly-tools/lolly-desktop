@@ -53,6 +53,10 @@ fn run_gui(context: tauri::Context) {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             desktop_integration::classify_argv(app, &argv[1..]);
         }))
+        // Makes tauri.conf.json's plugins.deep-link block live: the bundler registers
+        // lolly:// from it on macOS/Windows/Linux. Delivery stays on our own queue
+        // (classify_argv for argv, classify_opened for macOS Apple Events below).
+        .plugin(tauri_plugin_deep_link::init())
         .manage(desktop_integration::DesktopEvents::default())
         .manage(desktop_integration::HotFolder::default())
         // The shared authenticated-capture session (persistent Chrome profile + the
@@ -153,9 +157,34 @@ fn run_gui(context: tauri::Context) {
             }
             #[cfg(target_os = "linux")]
             desktop_integration::dbus::serve(handle);
+            // A dev build is not installed, so nothing has told the OS who handles
+            // lolly://. Windows and Linux can register at runtime (a user-level
+            // registry key / xdg entry); macOS reads only the bundle's plist, which
+            // the bundler writes from tauri.conf.json - so `tauri dev` on a Mac
+            // cannot receive the scheme, and the installed .app can.
+            #[cfg(all(debug_assertions, any(windows, target_os = "linux")))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    eprintln!("[desktop] lolly:// not registered for this dev build: {e}");
+                }
+            }
             Ok(())
         })
-        .run(context)
-        .expect("error while running Lolly desktop");
+        .build(context)
+        .expect("error while building Lolly desktop")
+        .run(|app, event| {
+            // macOS hands URL and file opens to the running process as Apple Events,
+            // never as argv, and Tauri surfaces them here as RunEvent::Opened - a
+            // lolly:// click, or a .lolly double-clicked in Finder, cold start
+            // included. Same queue as argv, so the web side cannot tell the
+            // platforms apart.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                desktop_integration::classify_opened(app, urls);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, &event);
+        });
 }
 

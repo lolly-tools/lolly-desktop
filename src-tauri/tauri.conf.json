@@ -79,5 +79,14 @@
         }
       }
     }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "lolly"
+        ]
+      }
+    }
   }
 }

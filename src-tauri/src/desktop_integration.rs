@@ -91,6 +91,44 @@ pub fn classify_argv(app: &AppHandle, argv: &[String]) {
     focus_main(app);
 }
 
+/// What one OS-delivered URL means to the queue: a lolly:// deep link, or a file
+/// the person opened. Pure, so the mapping has a test without an AppHandle.
+#[derive(Debug, PartialEq)]
+pub enum Opened {
+    DeepLink(String),
+    OpenFile(PathBuf),
+}
+
+pub fn opened_event(url: &url::Url) -> Option<Opened> {
+    match url.scheme() {
+        "lolly" => Some(Opened::DeepLink(url.as_str().to_string())),
+        "file" => url
+            .to_file_path()
+            .ok()
+            .filter(|p| p.is_file())
+            .map(Opened::OpenFile),
+        _ => None,
+    }
+}
+
+/// The Apple-Event twin of classify_argv: macOS delivers a lolly:// click and a
+/// double-clicked .lolly as RunEvent::Opened URLs (lib.rs), never as argv. Same
+/// queue, same events, so the web side never learns which platform it is on.
+pub fn classify_opened(app: &AppHandle, urls: &[url::Url]) {
+    let events: State<'_, DesktopEvents> = app.state();
+    for url in urls {
+        match opened_event(url) {
+            Some(Opened::DeepLink(link)) => events.push("deepLink", link),
+            Some(Opened::OpenFile(path)) => {
+                let canon = path.canonicalize().unwrap_or(path);
+                events.push_path("openFile", canon);
+            }
+            None => {}
+        }
+    }
+    focus_main(app);
+}
+
 pub fn focus_main(app: &AppHandle) {
     if let Some(win) = app.webview_windows().values().next() {
         let _ = win.show();
@@ -609,5 +647,34 @@ pub mod dbus {
                 Err(e) => eprintln!("[desktop] dbus setup failed: {e}"),
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opened_event_maps_the_scheme_and_real_files_only() {
+        let link = url::Url::parse("lolly://tool/qr-code?url=x").unwrap();
+        assert_eq!(
+            opened_event(&link),
+            Some(Opened::DeepLink("lolly://tool/qr-code?url=x".into()))
+        );
+        // Only the scheme is a deep link - an https link is not routed.
+        let https = url::Url::parse("https://lolly.tools/t/qr-code").unwrap();
+        assert_eq!(opened_event(&https), None);
+        // A file URL must name a file that exists; a missing path is not an open.
+        let dir = std::env::temp_dir().join(format!("lolly-opened-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("x.lolly");
+        std::fs::write(&file, b"PK").unwrap();
+        let file_url = url::Url::from_file_path(&file).unwrap();
+        assert_eq!(opened_event(&file_url), Some(Opened::OpenFile(file.clone())));
+        let missing = url::Url::from_file_path(dir.join("missing.lolly")).unwrap();
+        assert_eq!(opened_event(&missing), None);
+        let dir_url = url::Url::from_file_path(&dir).unwrap();
+        assert_eq!(opened_event(&dir_url), None, "a directory is not a file open");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

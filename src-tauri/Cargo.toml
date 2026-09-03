@@ -19,6 +19,14 @@ tauri-plugin-http = "2"
 # One running app per user (plans/174): a second launch forwards its argv (file
 # paths from the file manager, lolly:// links) to the live window and exits.
 tauri-plugin-single-instance = "2"
+# lolly:// registration (plans/174). The bundler reads tauri.conf.json's
+# plugins.deep-link block and writes the scheme into the macOS Info.plist
+# (CFBundleURLTypes), the Windows installer's registry keys and the generated
+# .desktop MimeType; this crate is what makes that block a real config, and in
+# a dev build it registers the scheme at runtime on Windows/Linux (register_all).
+# Delivery does NOT go through the plugin's events: argv stays with classify_argv
+# and macOS's RunEvent::Opened goes into the same DesktopEvents queue (lib.rs).
+tauri-plugin-deep-link = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Page capture (url-shot tool): drives a headless Chrome over the DevTools
