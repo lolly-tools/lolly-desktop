@@ -46,7 +46,7 @@ conflicts=('lolly-desktop')
 # !strip: keep the shipped binary byte-identical to the canonical build.
 options=('!strip')
 source=("https://lolli.li/lolly-desktop-${pkgver}_amd64.deb")
-sha256sums=('117e2703239e85210badfa64eeb5db37410a17e0a6e7123bf6ce50b0395a1ba9')
+sha256sums=('473e882c72fd757ae337bcd5f8afe143fef88114a131d6ab64c95610512ba458')
 
 package() {
   # makepkg has already unpacked the .deb (an ar archive bsdtar understands)
