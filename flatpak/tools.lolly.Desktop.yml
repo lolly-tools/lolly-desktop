@@ -76,14 +76,15 @@ modules:
   - name: lolly
     buildsystem: simple
     build-commands:
-      # 1) Unpack the Tauri-built .deb (ar archive -> data.tar.gz) and install ONLY its
-      #    binary, as /app/bin/lolly-desktop to match `command:` above. Installing
-      #    whatever single binary ./usr/bin ships keeps this correct even if a Tauri
-      #    version names it differently than the Cargo package. (Tauri gzips the data
-      #    member, hence -xzf; see README if a future version switches to xz/zst.)
+      # 1) Unpack the Tauri-built .deb (ar archive -> data.tar.gz) and install its app
+      #    binary BY NAME as /app/bin/lolly-desktop (matches `command:` above). This used
+      #    to take "the first file in usr/bin": since 1.0.3 the .deb also ships the 3.5 KB
+      #    lolly-thumbnail there, `find` returned it first, and every CI Flatpak from then
+      #    on was a 313 KB bundle whose "app" was the thumbnailer script. (Tauri gzips
+      #    the data member, hence -xzf; see README if a future version switches to xz/zst.)
       - ar x lolly.deb
       - tar -xzf data.tar.gz
-      - install -Dm755 "$(find usr/bin -maxdepth 1 -type f | head -1)" /app/bin/lolly-desktop
+      - install -Dm755 usr/bin/lolly-desktop /app/bin/lolly-desktop
       # 2) Ship a deterministic desktop entry, AppStream metainfo, and icons rather
       #    than fishing them out of the .deb's internal layout (names/paths vary by
       #    Tauri version). flatpak-builder auto-exports the .desktop + metainfo.
