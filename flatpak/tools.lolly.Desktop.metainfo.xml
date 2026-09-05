@@ -85,6 +85,21 @@
   <url type="homepage">https://lolly.tools</url>
 
   <releases>
+    <release version="1.0.7" date="2026-09-05">
+      <description>
+        <p>Lolly files now use one manifest-led opening flow across the app and
+           operating system. Shared designs, design systems and brand workspaces
+           are identified before import, with measured size and content details.</p>
+        <ul>
+          <li>Large bundles are inspected without expanding their payload first,
+              then verified once after confirmation.</li>
+          <li>Design systems import separately without replacing existing systems;
+              cancelled file pickers make no changes.</li>
+          <li>Finder and Linux file managers recognise Lolly documents, while
+              supported third-party formats remain alternate opening choices.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.6" date="2026-09-03">
       <description>
         <p>A formal release across every platform. The design-system studio now

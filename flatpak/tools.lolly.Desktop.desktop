@@ -4,7 +4,8 @@ Name=Lolly
 Comment=Generate on-brand creative assets from simple inputs
 # Exec is the in-sandbox command; Flatpak rewrites it to `flatpak run tools.lolly.Desktop`
 # in the exported host entry. Icon name matches the installed hicolor icon (the app id).
-Exec=lolly-desktop
+# %U forwards both selected documents and lolly:// links to the app's argv router.
+Exec=lolly-desktop %U
 Icon=tools.lolly.Desktop
 Terminal=false
 Categories=Graphics;2DGraphics;

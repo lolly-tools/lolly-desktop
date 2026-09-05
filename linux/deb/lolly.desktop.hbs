@@ -25,7 +25,8 @@
 Type=Application
 Name={{name}}
 Comment=Generate on-brand creative assets from simple inputs
-Exec={{exec}}
+{{!-- %U forwards both file:// URLs and lolly:// deep links to the argv router. --}}
+Exec={{exec}} %U
 Icon={{icon}}
 Terminal=false
 Categories=Graphics;2DGraphics;

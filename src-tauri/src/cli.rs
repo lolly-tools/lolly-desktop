@@ -103,6 +103,7 @@ fn is_sidecar_verb(value: &str) -> bool {
             | "optimize"
             | "package"
             | "assets"
+            | "files"
             | "batch"
             | "smoke"
             | "validate"

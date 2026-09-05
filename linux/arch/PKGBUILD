@@ -27,7 +27,7 @@
 # file needed.
 
 pkgname=lolly-desktop-bin
-pkgver=1.0.6
+pkgver=1.0.7
 pkgrel=1
 pkgdesc="Constraint-first studio for on-brand creative assets (official binary release)"
 arch=('x86_64')
@@ -46,13 +46,17 @@ conflicts=('lolly-desktop')
 # !strip: keep the shipped binary byte-identical to the canonical build.
 options=('!strip')
 source=("https://lolli.li/lolly-desktop-${pkgver}_amd64.deb")
-sha256sums=('473e882c72fd757ae337bcd5f8afe143fef88114a131d6ab64c95610512ba458')
+sha256sums=('ced524a5378c417d51aa3eec61356bb87e8f0cb552ccb41a9a8b4a3cc787763b')
 
 package() {
   # makepkg has already unpacked the .deb (an ar archive bsdtar understands)
-  # into $srcdir: debian-binary, control.tar.gz, data.tar.gz. Everything
-  # installable lives in data.tar.gz with its final /usr paths and modes, so
-  # it extracts straight into $pkgdir - no rebuild, no file moves, -p keeps
-  # the deb's file modes (the thumbnailer's exec bit included).
-  bsdtar -xpf "$srcdir/data.tar.gz" -C "$pkgdir"
+  # into $srcdir: debian-binary, control.tar.*, data.tar.*. Debian permits
+  # gzip, xz and zstd members, so do not couple this repack to one compressor.
+  # Everything installable lives in that data member with its final /usr paths
+  # and modes, so it extracts straight into $pkgdir - no rebuild, no file moves,
+  # and -p keeps the deb's file modes (the thumbnailer's exec bit included).
+  local data_archive
+  data_archive=$(find "$srcdir" -maxdepth 1 -type f -name 'data.tar.*' -print -quit)
+  [[ -n "$data_archive" ]] || return 1
+  bsdtar -xpf "$data_archive" -C "$pkgdir"
 }
