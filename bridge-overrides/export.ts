@@ -28,7 +28,9 @@
  */
 import { createExportAPI as createWebExportAPI } from '../../web/src/bridge/export.ts';
 import { writeFile, mkdir, exists, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
+import { basename, dirname, downloadDir, join } from '@tauri-apps/api/path';
 
 // Seeded by the native side (src-tauri/src/cli.rs build_init_script) ONLY when the
 // binary was invoked as a headless CLI render. Absent for every GUI launch, so the
@@ -36,6 +38,7 @@ import { invoke } from '@tauri-apps/api/core';
 declare global {
   interface Window {
     __LOLLY_CLI__?: { output?: string | null; stdout?: boolean };
+    __LOLLY_DESKTOP_EXPORT__?: { requestSaveAs(): void; cancelSaveAs(): void };
   }
 }
 
@@ -60,6 +63,16 @@ type WebExportAPI = ReturnType<typeof createWebExportAPI>;
 
 const SUBDIR = 'Lolly';
 const BASE = { baseDir: BaseDirectory.Download };
+const LAST_SAVE_DIR = 'lolly-desktop-last-save-dir';
+let saveAsNext = false;
+
+// The web export panel feature-detects this bridge to add its desktop-only
+// secondary action. One-shot by construction: a cancelled dialog never makes a
+// later unrelated download prompt unexpectedly.
+window.__LOLLY_DESKTOP_EXPORT__ = {
+  requestSaveAs() { saveAsNext = true; },
+  cancelSaveAs() { saveAsNext = false; },
+};
 
 // Keep only filesystem-safe characters; never let a tool-supplied name traverse.
 const sanitize = (name: string | undefined): string =>
@@ -87,32 +100,107 @@ async function freeName(name: string): Promise<string> {
   return name;
 }
 
-function toast(message: string, isError?: boolean): void {
+function toast(
+  message: string,
+  isError?: boolean,
+  actions: Array<{ label: string; run(): void | Promise<void> }> = [],
+): void {
   try {
     const t = document.createElement('div');
-    t.textContent = message;
+    const copy = document.createElement('span');
+    copy.textContent = message;
+    t.appendChild(copy);
+    for (const action of actions) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = action.label;
+      button.style.cssText = 'margin-left:12px;border:0;border-radius:999px;padding:6px 10px;background:rgba(255,255,255,.14);color:inherit;font:inherit;cursor:pointer';
+      button.addEventListener('click', () => { void action.run(); });
+      t.appendChild(button);
+    }
     t.style.cssText =
       'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);' +
       'z-index:2147483647;padding:12px 18px;border-radius:12px;max-width:90vw;text-align:center;' +
       'font:14px/1.35 SUSE,system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.35);' +
       (isError ? 'background:#7a1f1f;color:#fff' : 'background:#0c322c;color:#eafff4');
     document.body.appendChild(t);
-    setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, 2800);
+    // Action toasts stay long enough to read and reach; plain confirmations remain
+    // brief so repeated batch exports do not leave chrome hanging over the canvas.
+    const lifetime = actions.length ? 6500 : 2800;
+    setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, lifetime);
   } catch { /* no DOM - nothing to show */ }
+}
+
+async function noteAndOfferReveal(path: string, message: string): Promise<void> {
+  let noted = false;
+  try {
+    await invoke('desktop_note_export', { path });
+    noted = true;
+  } catch { /* save still succeeded; omit an action the native side cannot allow */ }
+  toast(message, false, noted ? [{
+    label: 'Reveal',
+    run: async () => {
+      try { await invoke('desktop_reveal_export', { path }); }
+      catch (err) { toast(`Couldn't reveal that file: ${String(err)}`, true); }
+    },
+  }] : []);
+}
+
+function rememberedSaveDir(): string | null {
+  try { return localStorage.getItem(LAST_SAVE_DIR); } catch { return null; }
+}
+
+function rememberSaveDir(path: string): void {
+  try { localStorage.setItem(LAST_SAVE_DIR, path); } catch { /* device-local nicety */ }
+}
+
+async function saveAs(bytes: Uint8Array, filename: string): Promise<void> {
+  const fallback = await downloadDir();
+  const initialDir = rememberedSaveDir() || fallback;
+  const defaultPath = await join(initialDir, filename);
+  const ext = splitExt(filename)[1].slice(1).toLowerCase();
+  const path = await save({
+    title: 'Save Lolly export',
+    defaultPath,
+    ...(ext ? { filters: [{ name: `${ext.toUpperCase()} file`, extensions: [ext] }] } : {}),
+  });
+  if (!path) throw new DOMException('Save cancelled', 'AbortError');
+  // No baseDir here - `path` can be anywhere the user picked, outside every scope this
+  // shell's fs capability declares ($APPDATA/saved-state/**, pack-store/**,
+  // $DOWNLOAD/Lolly/**). That is not a gap: `tauri-plugin-dialog`'s `save()` command
+  // calls `Scopes::allow_file`/`try_fs_scope().allow_file` on the picked path itself
+  // (tauri-plugin-dialog 2.7.2, src/commands.rs, the `save` command) before returning
+  // it, which extends the fs scope for THIS SESSION only - it is not persisted to
+  // capabilities/default.json and does not survive a restart. Verified 2026-09-05
+  // against the vendored crate source at
+  // ~/.cargo/registry/src/*/tauri-plugin-dialog-2.7.2/src/commands.rs.
+  await writeFile(path, bytes);
+  rememberSaveDir(await dirname(path));
+  const chosenName = await basename(path);
+  await noteAndOfferReveal(path, `Saved “${chosenName}”`);
 }
 
 async function saveToDownloads(blob: Blob, filename: string | undefined, host: ExportHost): Promise<void> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const name = sanitize(filename);
   try {
+    if (saveAsNext) {
+      saveAsNext = false;
+      await saveAs(bytes, name);
+      host?.log?.('info', `Saved ${name} with the native Save As dialog`);
+      return;
+    }
     if (!(await exists(SUBDIR, BASE))) {
       await mkdir(SUBDIR, { ...BASE, recursive: true });
     }
     const finalName = await freeName(name);
     await writeFile(`${SUBDIR}/${finalName}`, bytes, BASE);
     host?.log?.('info', `Saved ${finalName} to Downloads/${SUBDIR}`);
-    toast(`Saved “${finalName}” to Downloads/${SUBDIR}`);
+    const absolute = await join(await downloadDir(), SUBDIR, finalName);
+    await noteAndOfferReveal(absolute, `Saved “${finalName}” to Downloads/${SUBDIR}`);
   } catch (err) {
+    saveAsNext = false;
+    if ((err as { name?: string })?.name === 'AbortError') throw err;
     host?.log?.('error', 'Desktop export save failed', { error: String(err) });
     toast(`Couldn't save “${name}”: ${err instanceof Error ? err.message : String(err)}`, true);
     throw err;

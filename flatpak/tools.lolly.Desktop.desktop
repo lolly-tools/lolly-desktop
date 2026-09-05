@@ -9,10 +9,10 @@ Icon=tools.lolly.Desktop
 Terminal=false
 Categories=Graphics;2DGraphics;
 Keywords=brand;design;qr;svg;pdf;chart;template;
-# The canonical .lolly MIME (LOLLY_MIME in shells/web/src/lib/lolly-pack.ts, registered
-# by ../linux/mime/tools.lolly.Desktop.xml), plus SVG open-with and the lolly:// deep
-# link - the URL after the scheme is exactly a lolly.tools URL path (URL-mode contract).
-MimeType=application/vnd.lolly+zip;image/svg+xml;x-scheme-handler/lolly;
+# Lolly owns its canonical bundle MIME. The remaining document MIME types are
+# alternate Open With routes into real on-device importers; installing this entry
+# does not change a person's default application. The final handler is lolly://.
+MimeType=application/vnd.lolly+zip;application/x-penpot;application/x-figma;application/vnd.adobe.indesign-idml-package;application/illustrator;image/svg+xml;application/pdf;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;text/csv;text/tab-separated-values;application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.openxmlformats-officedocument.wordprocessingml.document;image/vnd.adobe.photoshop;image/x-xcf;x-scheme-handler/lolly;
 Actions=new-qr;colour-lab;strip-data;
 
 # Desktop actions ride the same deep-link route as x-scheme-handler/lolly above - the

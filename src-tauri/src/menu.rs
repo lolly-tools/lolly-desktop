@@ -32,9 +32,11 @@ pub struct MenuData {
 }
 
 /// Menu ids carry their payload: `lolly:#/u` navigates, `lolly-theme:dark`
-/// switches theme, `open_exports` (pre-existing) reveals the exports folder.
+/// switches theme, `lolly-zoom:1` steps the webview zoom, `open_exports`
+/// (pre-existing) reveals the exports folder.
 const ROUTE_PREFIX: &str = "lolly:";
 const THEME_PREFIX: &str = "lolly-theme:";
+const ZOOM_PREFIX: &str = "lolly-zoom:";
 
 fn route_item(
     handle: &AppHandle,
@@ -92,6 +94,30 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
         tools.append(&route_item(handle, &t.name, &format!("#/tool/{}", t.id), accel)?)?;
     }
 
+    // Zoom - the whole-UI zoom a browser gives every page for free and a wry
+    // webview gives none (plans/202 WP4.1). The ACCELERATORS live here rather
+    // than on a keydown listener in the page: a menu accelerator is consumed
+    // before the webview sees the key, so there is exactly one handler and no
+    // chance of the menu and a page listener both firing. The step itself is
+    // done in JS (bridge-overrides/zoom.ts) because that is where the clamp and
+    // the saved factor live. shells/web/src/views/tool-stage-nav.ts answers the
+    // BARE keys for canvas zoom and deliberately ignores the modified ones, so
+    // these three take nothing away from it.
+    let zoom = Submenu::new(handle, "Zoom", true)?;
+    for (label, arg, accel) in [
+        ("Zoom In", "1", "CmdOrCtrl+="),
+        ("Zoom Out", "-1", "CmdOrCtrl+-"),
+        ("Actual Size", "0", "CmdOrCtrl+0"),
+    ] {
+        zoom.append(&MenuItem::with_id(
+            handle,
+            format!("{ZOOM_PREFIX}{arg}"),
+            label,
+            true,
+            Some(accel),
+        )?)?;
+    }
+
     // Appearance - radio over the three themes, checked from the pushed state.
     let appearance = Submenu::new(handle, "Appearance", true)?;
     for (label, value) in [("Light", "light"), ("Dark", "dark"), ("Brand", "brand")] {
@@ -111,6 +137,18 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
     help.append(&route_item(handle, "Quickstart", "#/docs/quickstart", None)?)?;
     help.append(&route_item(handle, "Documentation", "#/docs/index", None)?)?;
     help.append(&route_item(handle, "Ask Lolly", "#/ask", None)?)?;
+    help.append(&PredefinedMenuItem::separator(handle)?)?;
+    // Updates are a route, not a command (plans/202 WP4.1). The row lives in
+    // Profile under "Lolly instance" - the card that already answers "what is
+    // this install" - so this opens that card and asks it to check straight away.
+    // `check=updates` is read by mountProfile; a build with no updater global
+    // shows no row and the deep link just opens the card.
+    help.append(&route_item(
+        handle,
+        "Check for Updates",
+        "#/profile?focus=instance-section&check=updates",
+        None,
+    )?)?;
     // "About Lolly" opens the docs site rather than a version dialog. Tauri's
     // `Menu::default()` puts a PredefinedMenuItem::about - a GTK/Windows dialog
     // listing version and copyright - in ITS OWN "Help" submenu on non-macOS, which
@@ -139,6 +177,7 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
                 Some("View") => {
                     go_pos = Some(i + 1);
                     let _ = sub.append(&PredefinedMenuItem::separator(handle)?);
+                    let _ = sub.append(&zoom);
                     let _ = sub.append(&appearance);
                 }
                 Some("Window") => {
@@ -163,7 +202,7 @@ pub fn build_menu(handle: &AppHandle, data: &MenuData) -> tauri::Result<Menu<tau
             // No View submenu on this platform: everything top-level, still works.
             menu.append(&go)?;
             menu.append(&tools)?;
-            menu.append(&Submenu::with_items(handle, "View", true, &[&appearance])?)?;
+            menu.append(&Submenu::with_items(handle, "View", true, &[&zoom, &appearance])?)?;
         }
     }
     if !exports_placed {
@@ -195,6 +234,13 @@ pub fn handle_event(app: &AppHandle, event: &MenuEvent) {
             "window.__lollyMenu&&window.__lollyMenu.setTheme({})",
             serde_json::to_string(theme).unwrap_or_default()
         )
+    } else if let Some(step) = id.strip_prefix(ZOOM_PREFIX) {
+        // The id is our own literal ("1" / "-1" / "0"), parsed here so a
+        // malformed one is dropped rather than eval'd.
+        match step.parse::<i32>() {
+            Ok(n) => format!("window.__lollyZoom&&window.__lollyZoom.step({n})"),
+            Err(_) => return,
+        }
     } else {
         return;
     };

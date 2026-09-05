@@ -59,7 +59,7 @@
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri_plugin_http::reqwest::{header, redirect::Policy, Client, Url};
+use reqwest::{header, redirect::Policy, Client, Url};
 
 /// Ceiling on the page HTML. Real pages are ≤ 1 MB; this is the hostile bound.
 const MAX_HTML_BYTES: usize = 8 * 1024 * 1024;
@@ -362,7 +362,7 @@ async fn get_capped(client: &Client, url: &Url, cap: usize) -> Result<(String, V
 /// lying one) cannot allocate past the cap: the declared length is checked
 /// first, then every chunk is checked as it arrives.
 async fn read_capped(
-    resp: &mut tauri_plugin_http::reqwest::Response,
+    resp: &mut reqwest::Response,
     cap: usize,
     out: &mut Vec<u8>,
 ) -> Result<(), String> {

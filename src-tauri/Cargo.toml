@@ -5,7 +5,10 @@ edition = "2021"
 
 [lib]
 name = "lolly_desktop_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# This shell never targets iOS or Android. The desktop binary imports this rlib
+# directly; emitting the mobile template's staticlib + cdylib duplicates the
+# embedded frontend into two unused products and can add gigabytes to a build.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -14,8 +17,11 @@ tauri-build = { version = "2", features = [] }
 # tray-icon: the clipboard-lens tray (src/desktop_integration/tray.rs, plans/174 #5).
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-fs = "2"
-tauri-plugin-shell = "2"
-tauri-plugin-http = "2"
+tauri-plugin-dialog = "2"
+# Native HTTPS is exposed only through the bounded `remote_fetch` and
+# `site_fetch` commands; there is deliberately no raw HTTP plugin/ACL surface.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "charset"] }
+tauri-plugin-window-state = "2"
 # One running app per user (plans/174): a second launch forwards its argv (file
 # paths from the file manager, lolly:// links) to the live window and exits.
 tauri-plugin-single-instance = "2"
@@ -27,6 +33,19 @@ tauri-plugin-single-instance = "2"
 # Delivery does NOT go through the plugin's events: argv stays with classify_argv
 # and macOS's RunEvent::Opened goes into the same DesktopEvents queue (lib.rs).
 tauri-plugin-deep-link = "2"
+# Self-update (plans/202 WP4.1). Reads plugins.updater in tauri.conf.json, checks
+# the endpoint for this target/arch, and verifies the artifact's minisign
+# signature against the configured public key before it writes anything. No byte
+# moves without a yes: bridge-overrides/updater.ts asks once to download and
+# again to install.
+tauri-plugin-updater = "2"
+# Relaunch after an update installs - that is the only call site. The plugin also
+# exposes exit(), which nothing here uses, and the capability grants only restart.
+tauri-plugin-process = "2"
+# OS notification for a finished background job (shells/web/src/lib/job-toast.ts).
+# Fires only while the window is hidden, and only after the user answered the
+# permission prompt their first long job raised.
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Page capture (url-shot tool): drives a headless Chrome over the DevTools

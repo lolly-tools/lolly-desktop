@@ -247,6 +247,8 @@ install -Dm0644 linux/search/org.lolly.Desktop1.service \
 # shipped - installing to both would double the menu on transitional systems.
 install -Dm0644 linux/kde/lolly-utilities.desktop \
     %{buildroot}%{_datadir}/kio/servicemenus/lolly-utilities.desktop
+install -Dm0644 linux/kde/tools.lolly.Desktop.runner.desktop \
+    %{buildroot}%{_datadir}/krunner/dbusplugins/tools.lolly.Desktop.desktop
 
 # The application/vnd.lolly+zip FILETYPE icon, so a .lolly has a face in Files and
 # Dolphin. Note the sizes differ from the app-icon loop above (48 here, no 512) -
@@ -332,6 +334,9 @@ fi
 %dir %{_datadir}/kio
 %dir %{_datadir}/kio/servicemenus
 %{_datadir}/kio/servicemenus/lolly-utilities.desktop
+%dir %{_datadir}/krunner
+%dir %{_datadir}/krunner/dbusplugins
+%{_datadir}/krunner/dbusplugins/tools.lolly.Desktop.desktop
 
 /usr/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png
 /usr/share/icons/hicolor/48x48/mimetypes/application-vnd.lolly+zip.png

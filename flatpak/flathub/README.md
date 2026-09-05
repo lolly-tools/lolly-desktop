@@ -37,9 +37,14 @@ cd shells/tauri-desktop && flatpak-node-generator npm package-lock.json \
   -o /tmp/node-desktop.json --node-sdk-extension node24
 ```
 
-Merge the two JSON arrays. They currently combine with **zero conflicts** (8 identical
-entries dedupe away) - but check, because two sources writing different content to one
-path would fail the build in a way that is tedious to read.
+Merge the two JSON arrays with the repository helper. It deduplicates identical
+destinations and fails if two sources would write different content to one path:
+
+```bash
+node scripts/merge-flatpak-node-sources.ts \
+  /tmp/node-root.json /tmp/node-desktop.json \
+  shells/tauri-desktop/flatpak/flathub/node-sources.json
+```
 
 ## Building and linting locally
 

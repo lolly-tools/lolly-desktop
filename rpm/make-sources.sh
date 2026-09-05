@@ -18,7 +18,7 @@
 #
 #   --skip-frontend   reuse an existing ../dist instead of rebuilding it. Only safe
 #                     if that dist was built from the current tree by this shell's
-#                     `npm run build:frontend` - a stale dist is silently embedded
+#                     `npm run build:frontend:release` - a stale dist is silently embedded
 #                     into the binary and is invisible in the finished RPM.
 set -euo pipefail
 
@@ -60,7 +60,7 @@ mkdir -p "$stage"
 #    must never be baked into a published RPM.
 # --------------------------------------------------------------------------
 if [ "$skip_frontend" -eq 0 ]; then
-  step "Building frontend (LOLLY_EMBED_CATALOG=profile npm run build:frontend)"
+  step "Building signed frontend (LOLLY_EMBED_CATALOG=profile npm run build:frontend:release)"
   # profile, not the shells' 'neutral' default: profile embeds catalog/previews/, the
   # per-tool gallery thumbnails. Neutral deliberately omits them (plans/131 WP-A), and
   # the visible cost is a gallery where every tile renders itself on first load. Safe
@@ -70,7 +70,7 @@ if [ "$skip_frontend" -eq 0 ]; then
   # Rebuild the previews first if the tool set changed, or you embed stale art:
   #   npm run build:ort && npm run previews
   # (build:ort is not optional - previews drives a web build that hard-fails without it.)
-  ( cd "$desktop" && LOLLY_EMBED_CATALOG=profile npm run build:frontend )
+  ( cd "$desktop" && LOLLY_EMBED_CATALOG=profile npm run build:frontend:release )
 else
   step "Reusing existing dist/ (--skip-frontend)"
 fi

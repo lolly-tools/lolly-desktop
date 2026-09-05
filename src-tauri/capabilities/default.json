@@ -4,22 +4,29 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "dialog:allow-save",
     "fs:allow-exists",
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
-    "fs:allow-create",
-    "fs:allow-rename",
     "fs:allow-remove",
     "fs:allow-mkdir",
     "fs:allow-read-dir",
-    "fs:scope-appdata-recursive",
-    "fs:scope-download-recursive",
-    "shell:allow-open",
+    "updater:default",
+    "notification:default",
+    "process:allow-restart",
+    "core:webview:allow-set-webview-zoom",
     {
-      "identifier": "http:default",
-      "allow": [{ "url": "https://*:*" }]
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$APPDATA/saved-state" },
+        { "path": "$APPDATA/saved-state/**" },
+        { "path": "$APPDATA/pack-store" },
+        { "path": "$APPDATA/pack-store/**" },
+        { "path": "$DOWNLOAD/Lolly" },
+        { "path": "$DOWNLOAD/Lolly/**" }
+      ]
     }
   ]
 }

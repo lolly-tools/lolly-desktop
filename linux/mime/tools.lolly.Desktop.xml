@@ -23,4 +23,22 @@
     </magic>
     <icon name="tools.lolly.Desktop"/>
   </mime-type>
+  <!-- Penpot and Figma have no shared-mime-info entries on many desktops, and
+       older databases also miss IDML. These extension-only definitions let the
+       desktop entry offer Lolly as an Open With fallback. They deliberately have
+       no Lolly icon or magic: the foreign format remains the foreign format. -->
+  <mime-type type="application/x-penpot">
+    <comment>Penpot project</comment>
+    <sub-class-of type="application/zip"/>
+    <glob pattern="*.penpot"/>
+  </mime-type>
+  <mime-type type="application/x-figma">
+    <comment>Figma design file</comment>
+    <glob pattern="*.fig"/>
+  </mime-type>
+  <mime-type type="application/vnd.adobe.indesign-idml-package">
+    <comment>InDesign Markup document</comment>
+    <sub-class-of type="application/zip"/>
+    <glob pattern="*.idml"/>
+  </mime-type>
 </mime-info>

@@ -5,7 +5,10 @@ mod menu;
 mod native_transport;
 mod nearby;
 mod oauth;
+mod render_server;
 mod reword;
+mod remote_fetch;
+mod root_export;
 mod site_fetch;
 
 /// Native entry (called from `main.rs`, and the mobile entry point). Reads argv
@@ -37,16 +40,43 @@ fn dispatch(args: Vec<String>) {
     let context = tauri::generate_context!();
     match mode {
         cli::Mode::Cli(job) => cli::run_cli(context, job),
-        _ => run_gui(context), // Gui (the others already returned above)
+        cli::Mode::Sidecar(args) => cli::run_sidecar(context, args),
+        cli::Mode::ExportRoot(dir) => root_export::run_export(&context, dir),
+        // The loopback render endpoint (plans/202 WP2.1). Its own builder, because it
+        // registers the cli_write/cli_done pair rather than the GUI's command set and
+        // never declares a window.
+        cli::Mode::RenderServer => render_server::run(context),
+        cli::Mode::SearchProvider => run_gui(context, cfg!(target_os = "linux")),
+        _ => run_gui(context, false), // Gui (the others already returned above)
     }
 }
 
 /// The desktop app proper: host the WebView and fulfil the `capture` capability.
-fn run_gui(context: tauri::Context) {
+fn run_gui(mut context: tauri::Context, search_provider: bool) {
+    // GNOME and KRunner start the provider over D-Bus while the app is closed.
+    // They must be able to query the embedded catalogue without flashing a full
+    // application window. Keep the ordinary main webview (activation promotes it)
+    // but override its initial visibility before Tauri builds it.
+    if search_provider {
+        for window in &mut context.config_mut().app.windows {
+            window.visible = false;
+        }
+    }
     tauri::Builder::default()
+        // Remember only spatial state. VISIBLE is deliberately excluded: a saved
+        // visible window must never make a D-Bus --search-provider launch flash.
+        // The plugin also rejects a position that intersects no current monitor.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_http::init())
         // One running app per user (plans/174): a second launch (file-manager
         // "Open with", a lolly:// click) forwards its argv here and exits; the
         // classifier turns it into openFile/deepLink events the webview polls.
@@ -57,8 +87,20 @@ fn run_gui(context: tauri::Context) {
         // lolly:// from it on macOS/Windows/Linux. Delivery stays on our own queue
         // (classify_argv for argv, classify_opened for macOS Apple Events below).
         .plugin(tauri_plugin_deep_link::init())
+        // Self-update (plans/202 WP4.1). The endpoint and the signing public key
+        // come from tauri.conf.json's plugins.updater block; the JS side
+        // (bridge-overrides/updater.ts) drives check → download → install, and
+        // asks before each of the last two. tauri_plugin_process is here only so
+        // "Install and restart" can restart.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        // Finished-job notifications (shells/web/src/lib/job-toast.ts through
+        // bridge-overrides/notify.ts). GUI only - a headless `Lolly run` never
+        // raises one, so cli.rs does not register this.
+        .plugin(tauri_plugin_notification::init())
         .manage(desktop_integration::DesktopEvents::default())
         .manage(desktop_integration::HotFolder::default())
+        .manage(desktop_integration::RecentExports::default())
         // The shared authenticated-capture session (persistent Chrome profile + the
         // optional live sign-in browser captures ride). Managed here so both the
         // capture commands and the sign-in/clear commands see the same instance.
@@ -79,8 +121,11 @@ fn run_gui(context: tauri::Context) {
             desktop_integration::desktop_set_wallpaper,
             desktop_integration::desktop_set_wallpaper_bytes,
             desktop_integration::desktop_read_accent,
-            desktop_integration::desktop_clipboard_read,
+            // desktop_clipboard_read is deliberately absent: the tray calls it
+            // directly in Rust and no JS ever did (plans/202 WP4.1).
             desktop_integration::desktop_hotfolder_set,
+            desktop_integration::desktop_note_export,
+            desktop_integration::desktop_reveal_export,
             menu::set_menu_data,
             capture::capture_page,
             capture::capture_page_pdf,
@@ -97,6 +142,10 @@ fn run_gui(context: tauri::Context) {
             reword::reword_probe,
             reword::reword_put_file,
             reword::reword_generate,
+            // CORS-free remote-instance/provider transport. Unlike the former
+            // raw HTTP plugin, this command pins public DNS answers, enforces
+            // HTTPS, bounds bytes/headers and rechecks every redirect.
+            remote_fetch::remote_fetch,
             // Website source for the Design System studio (plans/97 section 9). GUI
             // only, deliberately: unlike capture, which cli.rs also registers
             // because the url-shot TOOL calls host.capture mid-render, this
@@ -109,6 +158,7 @@ fn run_gui(context: tauri::Context) {
             // only - sign-in is interactive by definition.
             oauth::oauth_listen,
             oauth::oauth_wait,
+            oauth::oauth_open,
             // Nearby discovery (plans/110 section 3). GUI only for the same reason as
             // site_fetch: it is reachable from the collab ceremony / share sheets,
             // never from a headless render, so it stays out of cli.rs's handler.
@@ -132,28 +182,13 @@ fn run_gui(context: tauri::Context) {
         // double-clicked before the app ran, a lolly:// link that launched us),
         // the clipboard-lens tray, and - on Linux - the D-Bus search/automation
         // surfaces. All additive; failures degrade to a plain window, logged.
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
-            desktop_integration::classify_argv(
-                &handle,
-                &std::env::args().skip(1).collect::<Vec<_>>(),
-            );
-            // catch_unwind, not just `if let Err`: libappindicator-sys PANICS from a
-            // lazy dlopen when libayatana-appindicator3 is absent, so it never
-            // returns Err and the graceful path below could not fire. That is not
-            // hypothetical - no org.gnome.Platform runtime ships the library, so a
-            // Flatpak without it as a bundled module died on this line at startup.
-            // The Flatpak manifest now builds it, but a tray is a nicety and must
-            // never be the reason the app fails to open.
-            let tray = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                desktop_integration::setup_tray(&handle)
-            }));
-            match tray {
-                Ok(Err(e)) => eprintln!("[desktop] tray unavailable: {e}"),
-                Err(_) => eprintln!(
-                    "[desktop] tray unavailable: the appindicator library could not be loaded"
-                ),
-                Ok(Ok(())) => {}
+            if !search_provider {
+                desktop_integration::classify_argv(
+                    &handle,
+                    &std::env::args().skip(1).collect::<Vec<_>>(),
+                );
             }
             #[cfg(target_os = "linux")]
             desktop_integration::dbus::serve(handle);
@@ -188,3 +223,67 @@ fn run_gui(context: tauri::Context) {
         });
 }
 
+// ── Updater configuration (plans/202 WP4.1) ──────────────────────────────────
+//
+// The updater's whole safety story is in tauri.conf.json: where it looks, and
+// which public key an artifact must verify against. Neither is exercised by any
+// other test, and a wrong endpoint or a bundle that emits no signed artifact
+// both fail only at release time, on a user's machine. So pin them here, against
+// the real file.
+#[cfg(test)]
+mod updater_config {
+    const CONF: &str = include_str!("../tauri.conf.json");
+
+    /// The value the tree ships with. `release/build-latest-json.ts` refuses to
+    /// publish a manifest while this is in place; that is the loud failure, at
+    /// the one moment it matters. This test only pins the spelling, so the two
+    /// files cannot drift apart silently.
+    const PUBKEY_PLACEHOLDER: &str = "PLACEHOLDER-RUN-TAURI-SIGNER-GENERATE";
+
+    fn conf() -> serde_json::Value {
+        serde_json::from_str(CONF).expect("tauri.conf.json is valid JSON")
+    }
+
+    #[test]
+    fn endpoint_is_one_https_url_keyed_by_target_and_arch() {
+        let c = conf();
+        let endpoints = c["plugins"]["updater"]["endpoints"]
+            .as_array()
+            .expect("plugins.updater.endpoints");
+        assert_eq!(endpoints.len(), 1, "one endpoint, so there is one place to publish");
+        let url = endpoints[0].as_str().unwrap();
+        assert!(url.starts_with("https://"), "an update endpoint over plain http is not one: {url}");
+        // Both placeholders have to be there. Without them every platform reads
+        // one manifest and the first non-matching build gets offered the wrong
+        // artifact.
+        assert!(url.contains("{{target}}"), "endpoint must vary by target: {url}");
+        assert!(url.contains("{{arch}}"), "endpoint must vary by arch: {url}");
+    }
+
+    #[test]
+    fn pubkey_is_present_and_its_placeholder_spelling_is_pinned() {
+        let c = conf();
+        let key = c["plugins"]["updater"]["pubkey"]
+            .as_str()
+            .expect("plugins.updater.pubkey");
+        assert!(!key.is_empty(), "an empty pubkey disables signature checking");
+        if key != PUBKEY_PLACEHOLDER {
+            // A real minisign public key is base64 and comfortably longer than
+            // the placeholder. This catches a truncated or half-pasted key.
+            assert!(
+                key.len() >= 40,
+                "pubkey is neither the placeholder nor long enough to be a real key"
+            );
+        }
+    }
+
+    #[test]
+    fn bundle_emits_updater_artifacts() {
+        let c = conf();
+        assert_eq!(
+            c["bundle"]["createUpdaterArtifacts"].as_bool(),
+            Some(true),
+            "without this `tauri build` writes no .tar.gz and no .sig, so nothing can be published",
+        );
+    }
+}

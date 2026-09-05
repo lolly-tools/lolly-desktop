@@ -20,6 +20,7 @@ app renders or exports.
 | `search/tools.lolly.Desktop.SearchProvider.service` | `dbus-1/services/` | `dbus-1/services/` |
 | `search/org.lolly.Desktop1.service` | `dbus-1/services/` | `dbus-1/services/` |
 | `kde/lolly-utilities.desktop` | `kio/servicemenus/` | not installed (Flatpak never exports servicemenus) |
+| `kde/tools.lolly.Desktop.runner.desktop` | `krunner/dbusplugins/` | `krunner/dbusplugins/` (Flatpak 1.16+) |
 | `systemd/lolly-hotfolder.{path,service}` | not installed - documentation | not installed - documentation |
 
 Notes per file:
@@ -28,7 +29,11 @@ Notes per file:
   `application/vnd.lolly+zip` ("Lolly bundle", glob `*.lolly`, sub-class of
   `application/zip`, zip magic at priority 40 so plain zips keep winning on
   content). The MIME string is the app's canonical `LOLLY_MIME`
-  (`shells/web/src/lib/lolly-pack.ts`); tests guard the two against drift.
+  (`shells/web/src/lib/lolly-pack.ts`); tests guard the two against drift. It
+  also supplies extension-only definitions for Penpot, Figma and IDML on
+  desktops whose shared MIME database does not know them yet. Those foreign
+  types have no Lolly icon or magic rule; the `.desktop` entry merely makes the
+  app an Open With fallback and never changes an existing default handler.
 - **Thumbnailer** - `lolly-thumbnail` (python3 stdlib only) lifts the PNG `thumb`
   data URL straight out of a `.lolly`'s `manifest.json`; no thumb / non-PNG thumb /
   brand pack exits 1 and the file keeps its generic icon. `lolly.thumbnailer`
@@ -36,14 +41,18 @@ Notes per file:
   **Flatpak caveat:** `share/thumbnailers` is not on Flatpak's export whitelist,
   so host file managers only pick this up from the RPM/deb install; it is still
   installed in the Flatpak for forward-compatibility and in-sandbox consumers.
-- **Search** - the `.ini` tells GNOME Shell to query the app; the two D-Bus
-  `.service` files let the bus cold-start the app for a search or an
+- **Search** - the `.ini` tells GNOME Shell to query the app; the KRunner
+  metadata makes the same index discoverable in Plasma Search. The search
+  D-Bus service cold-starts `--search-provider`, whose webview stays hidden until
+  a result/provider action is activated; **Show more** carries the terms into
+  Lolly's `#/?q=` gallery search. The second D-Bus service starts an
   `org.lolly.Desktop1` automation call. `DBusActivatable` stays `false` in the
   .desktop: the running app owns both names itself, and the shell falls back to
   plain launching when activation is not available.
 - **KDE service menu** - "Strip hidden data / Convert / Redact with Lolly" on
-  images and PDFs in Dolphin. v1: all three verbs run `lolly-desktop %f` and land
-  in the app's drop flow for that file; per-verb deep routes are v2.
+  images and PDFs in Dolphin. Each verb carries an allowlisted target and the
+  selected file directly into that utility; ordinary Open With keeps the generic
+  chooser.
 - **systemd units** - a documented, hand-installed example of watching a hot
   folder with the CLI while the app is closed. The supported hot folder is the
   in-app one.

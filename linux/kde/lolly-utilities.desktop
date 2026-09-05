@@ -2,12 +2,10 @@
 # <datadir>/kio/servicemenus/ (the KF5 >= 5.85 / KF6 location; the pre-5.85
 # kservices5/ServiceMenus path is legacy and not shipped).
 #
-# v1 honesty: every verb routes through `lolly-desktop %f` - the app classifies the
-# argv path as an open-file event and runs it through the same drop flow a
-# dragged-in file gets, landing on the utility chooser for that file type. Per-verb
-# deep routes (opening strip-data/convert/redact directly preloaded) are v2, once
-# the argv router grows verb flags; three verbs ship now so the menu teaches what
-# the app can do rather than one vague "Open with Lolly".
+# Each verb carries a narrow internal target plus the selected path. The native
+# queue grants custody of only that delivered file; the web shell preloads it into
+# the named utility's ordinary file input. No second chooser discards the action
+# the person already selected.
 # desktop-file-validate rejects Type=Service + MimeType/Actions - that is the KDE
 # service-menu dialect, not a spec .desktop, and Dolphin is the only reader. The
 # repo test lints this file as a keyfile, not with desktop-file-validate.
@@ -22,14 +20,14 @@ X-KDE-Submenu=Lolly
 [Desktop Action lollyStrip]
 Name=Strip hidden data with Lolly
 Icon=tools.lolly.Desktop
-Exec=lolly-desktop %f
+Exec=lolly-desktop --open-with=strip-data %f
 
 [Desktop Action lollyConvert]
 Name=Convert with Lolly
 Icon=tools.lolly.Desktop
-Exec=lolly-desktop %f
+Exec=lolly-desktop --open-with=convert %f
 
 [Desktop Action lollyRedact]
 Name=Redact with Lolly
 Icon=tools.lolly.Desktop
-Exec=lolly-desktop %f
+Exec=lolly-desktop --open-with=redact %f

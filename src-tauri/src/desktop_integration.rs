@@ -13,20 +13,25 @@
 //! return Err("unsupported"), which the TS side treats as feature-absent, never
 //! as a failure to show the user.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 /// One queued native happening. `kind` is the plan-174 contract vocabulary:
-/// "openFile" | "deepLink" | "hotfolderFile" | "navigate".
+/// "openFile" | "openUtilityFile" | "deepLink" | "hotfolderFile" | "navigate".
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopEvent {
     pub kind: String,
     pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 /// The queue the webview polls, plus the custody set for file reads: the
@@ -49,7 +54,7 @@ impl DesktopEvents {
             if q.len() > 256 {
                 q.drain(0..128);
             }
-            q.push(DesktopEvent { kind: kind.into(), value });
+            q.push(DesktopEvent { kind: kind.into(), value, target: None });
         }
     }
 
@@ -59,11 +64,33 @@ impl DesktopEvents {
         }
         self.push(kind, path.to_string_lossy().into_owned());
     }
+
+    fn push_target_path(&self, kind: &str, path: PathBuf, target: &str) {
+        if let Ok(mut p) = self.delivered_paths.lock() {
+            p.insert(path.clone());
+        }
+        if let Ok(mut q) = self.queue.lock() {
+            if q.len() > 256 {
+                q.drain(0..128);
+            }
+            q.push(DesktopEvent {
+                kind: kind.into(),
+                value: path.to_string_lossy().into_owned(),
+                target: Some(target.into()),
+            });
+        }
+    }
 }
 
 /// The live hot-folder watcher, replaced wholesale on every `desktop_hotfolder_set`.
 #[derive(Default)]
 pub struct HotFolder(Mutex<Option<notify::RecommendedWatcher>>);
+
+/// Recently written exports which the webview may ask the OS to reveal. Keeping
+/// this allowlist native means a compromised page cannot use the reveal command
+/// as an arbitrary filesystem navigator.
+#[derive(Default)]
+pub struct RecentExports(Mutex<VecDeque<PathBuf>>);
 
 // ── argv routing (single-instance + first launch) ────────────────────────────
 
@@ -72,7 +99,14 @@ pub struct HotFolder(Mutex<Option<notify::RecommendedWatcher>>);
 /// and "click a lolly:// link" behave identically however the app was started.
 pub fn classify_argv(app: &AppHandle, argv: &[String]) {
     let events: State<'_, DesktopEvents> = app.state();
+    // Dolphin service-menu verbs use one deliberately narrow internal flag.
+    // Reject every unknown target instead of turning an arbitrary argv string
+    // into a route. The file still has to exist and enters delivered_paths below.
+    let utility = utility_target(argv);
     for arg in argv {
+        if arg.starts_with("--open-with=") || arg == "--search-provider" {
+            continue;
+        }
         if arg.starts_with("lolly://") {
             events.push("deepLink", arg.clone());
             continue;
@@ -82,13 +116,22 @@ pub fn classify_argv(app: &AppHandle, argv: &[String]) {
         // as it does for a drag-drop.
         let path = PathBuf::from(arg);
         if path.is_file() {
-            match path.canonicalize() {
-                Ok(canon) => events.push_path("openFile", canon),
-                Err(_) => events.push_path("openFile", path),
+            let path = path.canonicalize().unwrap_or(path);
+            if let Some(target) = utility {
+                events.push_target_path("openUtilityFile", path, target);
+            } else {
+                events.push_path("openFile", path);
             }
         }
     }
     focus_main(app);
+}
+
+fn utility_target(argv: &[String]) -> Option<&str> {
+    argv.iter().find_map(|arg| {
+        let target = arg.strip_prefix("--open-with=")?;
+        matches!(target, "strip-data" | "convert" | "redact").then_some(target)
+    })
 }
 
 /// What one OS-delivered URL means to the queue: a lolly:// deep link, or a file
@@ -130,6 +173,7 @@ pub fn classify_opened(app: &AppHandle, urls: &[url::Url]) {
 }
 
 pub fn focus_main(app: &AppHandle) {
+    ensure_tray(app);
     if let Some(win) = app.webview_windows().values().next() {
         let _ = win.show();
         let _ = win.set_focus();
@@ -157,6 +201,93 @@ pub fn desktop_read_file(events: State<'_, DesktopEvents>, path: String) -> Resu
         return Err("path was not delivered by the desktop".into());
     }
     std::fs::read(&p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn desktop_note_export(exports: State<'_, RecentExports>, path: String) -> Result<(), String> {
+    let path = PathBuf::from(path)
+        .canonicalize()
+        .map_err(|e| format!("saved export is unavailable: {e}"))?;
+    if !path.is_file() {
+        return Err("saved export is not a file".into());
+    }
+    let mut recent = exports.0.lock().map_err(|e| e.to_string())?;
+    recent.retain(|p| p != &path);
+    recent.push_back(path);
+    while recent.len() > 32 {
+        recent.pop_front();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn desktop_reveal_export(exports: State<'_, RecentExports>, path: String) -> Result<(), String> {
+    let path = PathBuf::from(path)
+        .canonicalize()
+        .map_err(|e| format!("saved export is unavailable: {e}"))?;
+    let allowed = exports
+        .0
+        .lock()
+        .map(|recent| recent.contains(&path))
+        .unwrap_or(false);
+    if !allowed {
+        return Err("that path was not written by this Lolly session".into());
+    }
+    reveal_file(&path)
+}
+
+#[cfg(target_os = "macos")]
+fn reveal_file(path: &std::path::Path) -> Result<(), String> {
+    let status = std::process::Command::new("open")
+        .arg("-R")
+        .arg(path)
+        .status()
+        .map_err(|e| e.to_string())?;
+    status
+        .success()
+        .then_some(())
+        .ok_or_else(|| "Finder could not reveal the export".into())
+}
+
+#[cfg(target_os = "linux")]
+fn reveal_file(path: &std::path::Path) -> Result<(), String> {
+    let uri = url::Url::from_file_path(path).map_err(|_| "could not form the export URI")?;
+    let shown = std::process::Command::new("dbus-send")
+        .args([
+            "--session",
+            "--dest=org.freedesktop.FileManager1",
+            "--type=method_call",
+            "/org/freedesktop/FileManager1",
+            "org.freedesktop.FileManager1.ShowItems",
+        ])
+        .arg(format!("array:string:{uri}"))
+        .arg("string:")
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if shown {
+        return Ok(());
+    }
+    let parent = path.parent().ok_or("export has no parent folder")?;
+    std::process::Command::new("xdg-open")
+        .arg(parent)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Files could not reveal the export: {e}"))
+}
+
+#[cfg(windows)]
+fn reveal_file(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("explorer.exe")
+        .arg(format!("/select,{}", path.display()))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+fn reveal_file(_path: &std::path::Path) -> Result<(), String> {
+    Err("revealing exports is not supported on this platform".into())
 }
 
 // ── portals (Linux) ──────────────────────────────────────────────────────────
@@ -248,13 +379,19 @@ pub async fn desktop_read_accent() -> Result<Option<String>, String> {
     Ok(None)
 }
 
-// ── clipboard (tray + lens UI, one-shot reads only) ──────────────────────────
+// ── clipboard (tray only, one-shot reads) ────────────────────────────────────
 
-/// One-shot clipboard read. Only ever called from an explicit user gesture (a
-/// tray item click, the lens UI button) - this module deliberately has NO
+/// One-shot clipboard read, called from exactly one place: a click on a
+/// clipboard-lens tray item (setup_tray below). This module deliberately has NO
 /// clipboard watcher, so nothing is observed that the user did not just ask
 /// about. That is the privacy stance, not an implementation shortcut.
-#[tauri::command]
+///
+/// It is NOT a `#[tauri::command]`. It was one, registered in lib.rs's
+/// invoke_handler, with no JS caller anywhere in the tree - a webview-reachable
+/// clipboard read that nothing used. The tray calls this function directly on
+/// the Rust side, so the IPC surface bought nothing and was removed (plans/202
+/// WP4.1). A future lens UI button would re-add the attribute and the
+/// registration together.
 pub fn desktop_clipboard_read() -> Result<String, String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.get_text().map_err(|e| e.to_string())
@@ -308,6 +445,38 @@ pub fn desktop_hotfolder_set(
 }
 
 // ── the clipboard-lens tray ──────────────────────────────────────────────────
+
+static TRAY_READY: AtomicBool = AtomicBool::new(false);
+
+/// Build the tray at most once, and only when Lolly becomes a visible app. A
+/// D-Bus provider query therefore remains invisible; activating a result (or a
+/// later ordinary second-instance launch) promotes the same process and adds
+/// the normal tray. A failed optional tray may be retried on the next promotion.
+pub fn ensure_tray(app: &AppHandle) {
+    if TRAY_READY
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+    // catch_unwind, not just `if let Err`: libappindicator-sys panics from a lazy
+    // dlopen when libayatana-appindicator3 is absent. A tray is a nicety and must
+    // never be the reason the app fails to open.
+    let tray = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| setup_tray(app)));
+    match tray {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            TRAY_READY.store(false, Ordering::Release);
+            eprintln!("[desktop] tray unavailable: {e}");
+        }
+        Err(_) => {
+            TRAY_READY.store(false, Ordering::Release);
+            eprintln!(
+                "[desktop] tray unavailable: the appindicator library could not be loaded"
+            );
+        }
+    }
+}
 
 /// A static menu whose items classify the clipboard AT CLICK TIME (one gesture,
 /// one read - see desktop_clipboard_read's doc). Building the menu contents
@@ -389,7 +558,7 @@ fn urlencode(s: &str) -> String {
 
 #[cfg(target_os = "linux")]
 pub mod dbus {
-    use super::{focus_main, DesktopEvents};
+    use super::{focus_main, urlencode, DesktopEvents};
     use std::collections::HashMap;
     use tauri::{AppHandle, Manager, State};
 
@@ -542,7 +711,12 @@ pub mod dbus {
         fn activate_result(&self, id: String, _terms: Vec<String>, _timestamp: u32) {
             activate(&self.app, &id);
         }
-        fn launch_search(&self, _terms: Vec<String>, _timestamp: u32) {
+        fn launch_search(&self, terms: Vec<String>, _timestamp: u32) {
+            let query = terms.join(" ");
+            if !query.trim().is_empty() {
+                let events: State<'_, DesktopEvents> = self.app.state();
+                events.push("navigate", format!("#/?q={}", urlencode(query.trim())));
+            }
             focus_main(&self.app);
         }
     }
@@ -584,10 +758,14 @@ pub mod dbus {
         }
     }
 
-    /// org.lolly.Desktop1 - external automation. Render is v1 = open-in-app:
-    /// the plan's escape hatch (a true headless render reuses cli.rs's hidden
-    /// window and is follow-up work; shipping a broken renderer would be worse
-    /// than an honest "opened").
+    /// org.lolly.Desktop1 - external automation. Render produces a real file: it
+    /// runs this executable's own CLI mode, which owns the off-screen WebView and
+    /// the cli_write path, and waits for the render to finish. A separate process
+    /// rather than an in-process job because this interface is served from the GUI,
+    /// whose visible window already holds the label an off-screen render needs.
+    /// Callers wanting bytes back on one warm connection use the loopback endpoint
+    /// (`Lolly --render-server`, render_server.rs) instead. D-Bus calls here are
+    /// handled serially, so only one render runs through this interface at a time.
     struct Desktop1 {
         app: AppHandle,
     }
@@ -600,15 +778,13 @@ pub mod dbus {
         fn show_tool(&self, id: String) {
             activate(&self.app, &id);
         }
-        fn render(&self, tool_url: String, _out_path: String) -> String {
-            let events: State<'_, DesktopEvents> = self.app.state();
-            let route = tool_url
-                .strip_prefix("lolly://")
-                .map(|rest| format!("#/{}", rest.trim_start_matches('/')))
-                .unwrap_or(tool_url);
-            events.push("navigate", route.clone());
-            focus_main(&self.app);
-            format!("opened:{route}")
+        fn render(&self, tool_url: String, out_path: String) -> String {
+            match crate::render_server::render_via_child(&tool_url, &out_path) {
+                // The file is on disk before this returns, so a caller can read it
+                // the moment the method answers.
+                Ok(()) => format!("written:{}", out_path.trim()),
+                Err(e) => format!("error:{e}"),
+            }
         }
     }
 
@@ -676,5 +852,13 @@ mod tests {
         let dir_url = url::Url::from_file_path(&dir).unwrap();
         assert_eq!(opened_event(&dir_url), None, "a directory is not a file open");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn utility_targets_are_an_explicit_allowlist() {
+        let args = vec!["--open-with=redact".into(), "/tmp/private.pdf".into()];
+        assert_eq!(utility_target(&args), Some("redact"));
+        let bad = vec!["--open-with=../tool/evil".into(), "/tmp/x".into()];
+        assert_eq!(utility_target(&bad), None);
     }
 }

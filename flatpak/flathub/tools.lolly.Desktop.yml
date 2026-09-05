@@ -214,6 +214,7 @@ modules:
       - install -Dm644 shells/tauri-desktop/linux/search/tools.lolly.Desktop.search-provider.ini /app/share/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini
       - install -Dm644 shells/tauri-desktop/linux/search/tools.lolly.Desktop.SearchProvider.service /app/share/dbus-1/services/tools.lolly.Desktop.SearchProvider.service
       - install -Dm644 shells/tauri-desktop/linux/search/org.lolly.Desktop1.service /app/share/dbus-1/services/org.lolly.Desktop1.service
+      - install -Dm644 shells/tauri-desktop/linux/kde/tools.lolly.Desktop.runner.desktop /app/share/krunner/dbusplugins/tools.lolly.Desktop.desktop
       - install -Dm755 shells/tauri-desktop/linux/thumbnailer/lolly-thumbnail /app/bin/lolly-thumbnail
       - install -Dm644 shells/tauri-desktop/linux/thumbnailer/lolly.thumbnailer /app/share/thumbnailers/lolly.thumbnailer
       # Filetype icon for application/vnd.lolly+zip, so a .lolly has a face in Files.

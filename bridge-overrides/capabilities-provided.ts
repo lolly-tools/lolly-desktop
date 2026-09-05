@@ -25,6 +25,17 @@ import type { Capability } from '@lolly-tools/core/host-v1';
 // which makes it the one guaranteed-early spot to install the portal-backed
 // window.EyeDropper before any colour field wires its buttons (plans/174 #4).
 import './eyedropper-shim.ts';
+// Three more side-effect installs, here for the same reason (plans/202 WP4.1).
+// Each publishes one small global the web shell probes for, so a shell without
+// it shows nothing rather than a dead control:
+//   __lollyNotify   job-toast's OS notification channel
+//   __lollyZoom     the View > Zoom menu's whole-UI zoom
+//   __lollyUpdater  the "Check for updates" row in Profile and the Help menu
+// They are not entries in vite.config.js's override map: that map only fires for
+// a module imported from inside bridge/, and their callers live in lib/ and views/.
+import './notify.ts';
+import './zoom.ts';
+import './updater.ts';
 import { PROVIDED_CAPABILITIES as WEB_CAPABILITIES } from '../../web/src/bridge/capabilities-provided.ts';
 
 export const PROVIDED_CAPABILITIES: readonly Capability[] = [...WEB_CAPABILITIES.filter(c => c !== 'screen'), 'filesystem', 'capture'];

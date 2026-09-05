@@ -1,8 +1,16 @@
 //! Native LAN socket transport - the Noise-over-TCP collab transport (plans/110 section 4,
 //! `plans/110-work/n2-design.md`), for the case WebRTC is absent (Linux webkitgtk) or a
-//! power user forces LAN. This is the CORE (handshake, framing, address policy); the
-//! socket-lifecycle wiring into the collab provider is the device-verified integration
-//! that follows, so nothing here is registered as a command yet.
+//! power user forces LAN. All seven commands (`native_connect`, `native_send`,
+//! `native_recv`, `native_plate`, `native_close`, `native_poll_inbound`, `native_adopt`)
+//! are registered in `lib.rs`'s invoke handler and called from the JS side in
+//! `shells/web/src/collab/native-transport.ts`.
+//!
+//! `#![allow(dead_code)]` below is NOT about unregistered commands (there are none) - it
+//! covers a handful of building-block functions (`build_initiator`, `build_responder`,
+//! `read_frame`, `NativeSession::send`/`recv`) that only this module's own tests call
+//! directly. Production code reaches the same logic through `session_send`/`session_recv`,
+//! which hold the session-table lock these methods do not. Verified 2026-09-05: removing
+//! the attribute and running `cargo check --lib` produces exactly those four warnings.
 //!
 //! SECURITY DECISIONS BAKED IN (Andy, 2026-08-13):
 //!   • The socket-open is **nearby-only + private-range**. `is_private_addr` is the
@@ -33,7 +41,7 @@
 //! nor flip a frame from one lane to another (stronger than a cleartext lane prefix, and
 //! what `snow`'s transport API supports without exposing associated data).
 
-#![allow(dead_code)] // wired into the collab provider in the device-verified integration.
+#![allow(dead_code)] // test-only helpers; see the module doc comment above.
 
 use std::io::{Read, Write};
 use std::net::IpAddr;

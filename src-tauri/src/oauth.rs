@@ -44,6 +44,47 @@ const RETURN_PAGE: &str = "<!doctype html><meta charset=\"utf-8\">\
 <body style=\"font:15px system-ui,sans-serif;color:#444;display:grid;place-items:center;min-height:90vh;margin:0\">\
 <p>\u{2705} Signed in \u{2014} you can close this tab and return to Lolly.</p>";
 
+/** Open only a parsed HTTPS authorization URL in the system browser. This
+ * narrow command replaces the generic shell plugin's `open` permission, so an
+ * injected caller cannot ask Tauri to open a file, executable, or custom URI. */
+#[tauri::command]
+pub fn oauth_open(raw: String) -> Result<(), String> {
+    let url = authorize_url(&raw)?;
+    open_system_url(url.as_str())
+}
+
+fn authorize_url(raw: &str) -> Result<url::Url, String> {
+    let url = url::Url::parse(raw).map_err(|_| "invalid authorization URL")?;
+    if url.scheme() != "https" || url.host_str().is_none() {
+        return Err("authorization URL must be https".into());
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("authorization URL must not contain credentials".into());
+    }
+    Ok(url)
+}
+
+fn open_system_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("rundll32");
+        cmd.arg("url.dll,FileProtocolHandler");
+        cmd
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(not(any(target_os = "macos", target_os = "windows", unix)))]
+    return Err("opening a system browser is unsupported on this platform".into());
+
+    command
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("could not open system browser: {e}"))
+}
+
 #[tauri::command]
 pub fn oauth_listen(ports: Option<Vec<u16>>, state: State<OauthListeners>) -> Result<u16, String> {
     let mut map = state.0.lock().map_err(|_| "listener table poisoned")?;
@@ -148,4 +189,18 @@ fn answer(stream: TcpStream) -> Option<String> {
         .as_bytes(),
     );
     query
+}
+
+#[cfg(test)]
+mod tests {
+    use super::authorize_url;
+
+    #[test]
+    fn authorization_urls_are_https_without_embedded_credentials() {
+        assert!(authorize_url("https://accounts.example.test/oauth?state=abc").is_ok());
+        assert!(authorize_url("http://accounts.example.test/oauth").is_err());
+        assert!(authorize_url("file:///tmp/secret").is_err());
+        assert!(authorize_url("https://user:password@accounts.example.test/oauth").is_err());
+        assert!(authorize_url("not a url").is_err());
+    }
 }

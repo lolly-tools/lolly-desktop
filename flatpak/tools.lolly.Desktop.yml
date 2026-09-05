@@ -101,10 +101,12 @@ modules:
       #    NOT exported - installed anyway for forward-compatibility, the RPM/deb is
       #    the packaging that thumbnails on the host today. The KDE service menu is
       #    deliberately absent here: Flatpak never exports kio/servicemenus.
+      #    KRunner D-Bus metadata is exportable since Flatpak 1.16.
       - install -Dm644 tools.lolly.Desktop.xml /app/share/mime/packages/tools.lolly.Desktop.xml
       - install -Dm644 tools.lolly.Desktop.search-provider.ini /app/share/gnome-shell/search-providers/tools.lolly.Desktop.search-provider.ini
       - install -Dm644 tools.lolly.Desktop.SearchProvider.service /app/share/dbus-1/services/tools.lolly.Desktop.SearchProvider.service
       - install -Dm644 org.lolly.Desktop1.service /app/share/dbus-1/services/org.lolly.Desktop1.service
+      - install -Dm644 tools.lolly.Desktop.runner.desktop /app/share/krunner/dbusplugins/tools.lolly.Desktop.desktop
       - install -Dm755 lolly-thumbnail /app/bin/lolly-thumbnail
       - install -Dm644 lolly.thumbnailer /app/share/thumbnailers/lolly.thumbnailer
       - install -Dm644 lolly-mime-32.png /app/share/icons/hicolor/32x32/mimetypes/application-vnd.lolly+zip.png
@@ -142,6 +144,8 @@ modules:
         path: ../linux/search/tools.lolly.Desktop.SearchProvider.service
       - type: file
         path: ../linux/search/org.lolly.Desktop1.service
+      - type: file
+        path: ../linux/kde/tools.lolly.Desktop.runner.desktop
       - type: file
         path: ../linux/thumbnailer/lolly-thumbnail
       - type: file
